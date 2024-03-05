@@ -1,3 +1,0 @@
-/home/codelist/projects/cc/build/CMakeFiles/cc.dir
-/home/codelist/projects/cc/build/CMakeFiles/edit_cache.dir
-/home/codelist/projects/cc/build/CMakeFiles/rebuild_cache.dir
