@@ -6,32 +6,28 @@
 #include "utility.hpp"
 
 // 获取所有类型中尺寸最大类型
-namespace {
-    template <typename T, typename... Types>
-    struct max_type {
-        using type = max_type<T, typename max_type<Types...>::type>::type;
-    };
+namespace mtl {
+    template <typename T>
+    constexpr auto max_type() -> T;
 
     template <typename T, typename U>
     requires(sizeof(T) >= sizeof(U))
-    struct max_type<T, U> {
-        using type = T;
-    };
+    constexpr auto max_type() -> T;
 
     template <typename T, typename U>
     requires(sizeof(T) < sizeof(U))
-    struct max_type<T, U> {
-        using type = U;
-    };
+    constexpr auto max_type() -> U;
 
-    template <typename T>
-    struct max_type<T> {
-        using type = T;
-    };
+    template <typename T, typename... Types>
+    requires(sizeof...(Types) >= 2)
+    constexpr auto max_type() -> decltype(max_type<T, decltype(max_type<Types...>())>());
 
     template <typename... Types>
-    using max_type_t = max_type<Types...>::type;
-}  // namespace
+    using max_type_t = decltype(max_type<Types...>());
+
+    template <typename... Types>
+    constexpr auto max_type_size = sizeof(max_type_t<Types...>);
+}  // namespace mtl
 
 // variant
 namespace mtl {
@@ -39,6 +35,6 @@ namespace mtl {
     requires(sizeof...(Types) >= 1)
     class variant<Types...> {
       private:
-        max_type_t<Types...> m_val;
+        char m_buf[max_type_size<Types...>];  // 栈缓冲区存放有效值
     };
 }  // namespace mtl

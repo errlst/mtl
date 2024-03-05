@@ -133,9 +133,7 @@ namespace mtl {
 // relational operator
 namespace mtl {
     template <typename T1, typename T2>
-    constexpr auto operator==(const pair<T1, T2>& lhs, const pair<T1, T2>& rhs) -> bool {
-        return lhs.first == rhs.first && lhs.second == rhs.second;
-    }
+    constexpr auto operator==(const pair<T1, T2>& lhs, const pair<T1, T2>& rhs) -> bool { return lhs.first == rhs.first && lhs.second == rhs.second; }
 
     template <typename T1, typename T2>
     constexpr auto operator<=>(const pair<T1, T2>& lhs, const pair<T1, T2>& rhs) -> std::common_comparison_category_t<synth_three_way_result<T1, T2>> {
@@ -150,18 +148,14 @@ namespace mtl {
 namespace mtl {
     template <typename T1, typename T2>
     requires(std::is_swappable_v<T1> && std::is_swappable_v<T2>)
-    constexpr auto swap(pair<T1, T2>& lhs, pair<T1, T2>& rhs) noexcept(noexcept(lhs.swap(rhs))) -> void {
-        lhs.swap(rhs);
-    }
+    constexpr auto swap(pair<T1, T2>& lhs, pair<T1, T2>& rhs) noexcept(noexcept(lhs.swap(rhs))) -> void { lhs.swap(rhs); }
 
 }  // namespace mtl
 
 // make function
 namespace mtl {
     template <typename T1, typename T2>
-    constexpr auto make_pair(T1&& arg1, T2&& arg2) -> pair<std::unwrap_ref_decay_t<T1>, std::unwrap_ref_decay_t<T2>> {
-        return {std::forward<T1>(arg1), std::forward<T2>(arg2)};
-    }
+    constexpr auto make_pair(T1&& arg1, T2&& arg2) -> pair<std::unwrap_ref_decay_t<T1>, std::unwrap_ref_decay_t<T2>> { return {std::forward<T1>(arg1), std::forward<T2>(arg2)}; }
 }  // namespace mtl
 
 // tuple size

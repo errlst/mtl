@@ -14,7 +14,7 @@ namespace mtl {
 
 // nullopt
 namespace mtl {
-    // nullopt_t 不能拥有默认构造函数，因此创建一个外部不可见的类，辅助构造 nullopt
+    // nullopt_t 不能拥有默认构造函数，使用外部不可见类，辅助构造
     namespace {
         struct nullopt_t_helper {};
     }  // namespace

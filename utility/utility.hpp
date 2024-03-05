@@ -103,19 +103,6 @@ namespace mtl {
             // N==0 时，type <=> helper<integer_sequence<T>>::type <=> integer_sequence<T,0>
             // N==1 时，type <=> helper<integer_sequence<T,0>>::type <=> integer_sequence<T,0,1>
             using type = decltype(seq_inc(typename make_integer_sequence_helper<T, N - 1>::type()));
-
-            /*
-            上述功能也可借助偏特化实现
-
-            template <typename>
-            struct seq_inc;
-
-            template <T... Idxs>
-            struct seq_inc<integer_sequence<T, Idxs...>> {  // 序列后追加一个数字
-                using type = integer_sequence<T, Idxs..., sizeof...(Idxs)>;
-            };
-            using type = typename seq_inc<typename make_integer_sequence_helper<T, N - 1>::type>::type;
-            */
         };
 
         template <typename T, T N>  // N==0
