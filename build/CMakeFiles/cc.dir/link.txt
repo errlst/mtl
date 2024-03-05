@@ -1,0 +1,1 @@
+/usr/sbin/g++ -g CMakeFiles/cc.dir/main.cc.o -o cc 
