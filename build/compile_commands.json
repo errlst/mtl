@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/home/codelist/projects/cc/build",
-  "command": "/usr/sbin/g++   -g -std=gnu++20 -o CMakeFiles/cc.dir/main.cc.o -c /home/codelist/projects/cc/main.cc",
-  "file": "/home/codelist/projects/cc/main.cc",
-  "output": "CMakeFiles/cc.dir/main.cc.o"
-}
-]
