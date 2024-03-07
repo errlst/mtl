@@ -1,5 +1,5 @@
 #pragma once
-#include <iostream>
+#include "tools.hpp"
 
 // piecewise construct
 namespace mtl {
@@ -10,7 +10,7 @@ namespace mtl {
     constexpr auto piecewise_construct = piecewise_construct_t{};
 }  // namespace mtl
 
-// inplace type
+// inplace
 namespace mtl {
     struct in_place_t {
         explicit in_place_t() = default;
@@ -21,8 +21,17 @@ namespace mtl {
     struct in_place_type_t {
         explicit in_place_type_t() = default;
     };
+
     template <typename T>
     constexpr auto in_place_type = in_place_type_t<T>{};
+
+    template <size_t Idx>
+    struct in_place_index_t {
+        explicit in_place_index_t() = default;
+    };
+
+    template <size_t Idx>
+    constexpr auto in_place_index = in_place_index_t<Idx>{};
 }  // namespace mtl
 
 // synth three way
@@ -83,6 +92,32 @@ namespace mtl {
     using tuple_element_t = tuple_element<Idx, T>::type;
 }  // namespace mtl
 
+// variant size
+namespace mtl {
+    template <typename T>
+    struct variant_size;
+
+    template <typename T>
+    struct variant_size<const T> : public variant_size<T> {};
+
+    template <typename T>
+    inline constexpr auto variant_size_v = variant_size<T>::value;
+}  // namespace mtl
+
+// variant alternative
+namespace mtl {
+    template <size_t Idx, typename T>
+    struct variant_alternative;
+
+    template <size_t Idx, typename T>
+    struct variant_alternative<Idx, const T> : public variant_alternative<Idx, T> {};
+
+    template <size_t Idx, typename T>
+    using variant_alternative_t = variant_alternative<Idx, T>::type;
+
+    inline constexpr size_t variant_npos = -1;
+}  // namespace mtl
+
 // integer sequence
 namespace mtl {
     template <typename T, T... Idx>
@@ -92,7 +127,7 @@ namespace mtl {
     };
 
     namespace {
-        template <typename T, T N, typename = void>  // N!=0
+        template <typename T, T N>  // N!=0
         struct make_integer_sequence_helper {
             template <T... Idxs>
             constexpr static auto seq_inc(integer_sequence<T, Idxs...>)  // 序列后追加一个数字
@@ -106,7 +141,8 @@ namespace mtl {
         };
 
         template <typename T, T N>  // N==0
-        struct make_integer_sequence_helper<T, N, std::enable_if_t<N == 0>> {
+        requires(N == 0)
+        struct make_integer_sequence_helper<T, N> {
             using type = integer_sequence<T>;
         };
     }  // namespace

@@ -9,32 +9,6 @@
 #pragma once
 #include "utility.hpp"
 
-// 获取第一个类型
-namespace {
-    template <typename T, typename... Types>
-    struct first {
-        using type = T;
-    };
-    template <typename... Types>
-    using first_t = first<Types...>::type;
-}  // namespace
-
-// 类型出现的次数
-namespace {
-    template <typename TD, typename T, typename... Types>
-    struct type_app_times {
-        constexpr static size_t times = type_app_times<TD, Types...>::times + std::is_same_v<TD, T>;
-    };
-
-    template <typename TD, typename T>
-    struct type_app_times<TD, T> {
-        constexpr static size_t times = std::is_same_v<TD, T>;
-    };
-
-    template <typename TD, typename... Types>
-    constexpr static bool type_unique_v = (type_app_times<TD, Types...>::times == 1);
-}  // namespace
-
 // tuple
 namespace mtl {
     template <>
@@ -45,10 +19,14 @@ namespace mtl {
 
     template <typename T, typename... Types>
     class tuple<T, Types...> : public tuple<Types...> {
+      private:
         using base = tuple<Types...>;
 
         template <typename... UTypes>
         friend class tuple;
+
+        // template <size_t, typename _T>
+        // friend constexpr auto get(_T&&) noexcept -> decltype(auto);
 
       public:  // 构造
         constexpr explicit(std::is_default_constructible_v<T>)
@@ -133,7 +111,7 @@ namespace mtl {
         }
 
         template <typename U1, typename U2>
-        requires(sizeof...(Types) == 1 && std::is_assignable_v<T&, const U1&> && std::is_assignable_v<first_t<Types...>, const U2&>)
+        requires(sizeof...(Types) == 1 && std::is_assignable_v<T&, const U1&> && std::is_assignable_v<nth_type<0, Types...>, const U2&>)
         constexpr auto operator=(const pair<U1, U2>& p) -> tuple& {
             m_ele = p.first;
             dynamic_cast<base&>(*this).m_ele = p.second;
@@ -141,7 +119,7 @@ namespace mtl {
         }
 
         template <typename U1, typename U2>
-        requires(sizeof...(Types) == 1 && std::is_assignable_v<T&, U1> && std::is_assignable_v<first_t<Types...>, U2>)
+        requires(sizeof...(Types) == 1 && std::is_assignable_v<T&, U1> && std::is_assignable_v<nth_type<0, Types...>, U2>)
         constexpr auto operator=(pair<U1, U2>&& p) -> tuple& {
             m_ele = std::forward<U1>(p.first);
             dynamic_cast<base&>(*this).m_ele = std::forward<U2>(p.second);
@@ -154,7 +132,6 @@ namespace mtl {
             std::swap(dynamic_cast<base&>(*this), dynamic_cast<base&>(t));
         }
 
-        // TODO 不会声明 get 的友元，暂时声明为 public
       public:
         T m_ele;
     };
@@ -194,15 +171,8 @@ namespace mtl {
 
 // tuple element
 namespace mtl {
-    template <size_t Idx, typename T, typename... Types>
-    struct tuple_element<Idx, tuple<T, Types...>> : public tuple_element<Idx - 1, tuple<Types...>> {
-        static_assert(Idx <= sizeof...(Types), "index out of tuple range");
-    };
-
-    template <typename T, typename... Types>  // 折叠到对应节点
-    struct tuple_element<0, tuple<T, Types...>> {
-        using type = T;
-    };
+    template <size_t Idx, typename... Types>
+    struct tuple_element<Idx, tuple<Types...>> : nth_type<Idx, Types...> {};
 }  // namespace mtl
 
 // get
@@ -245,7 +215,7 @@ namespace mtl {
 
     // 使用单独的递归模板检查是否存在相同元素
     template <typename TD, typename T, typename... Types>
-    constexpr auto get(tuple<T, Types...>& t) noexcept -> TD& requires(type_unique_v<TD, T, Types...>) {
+    constexpr auto get(tuple<T, Types...>& t) noexcept -> TD& requires(type_app_unique<TD, T, Types...>) {
         if constexpr (std::is_same_v<TD, T>) {
             return t.m_ele;
         } else {
@@ -254,7 +224,7 @@ namespace mtl {
     }
 
     template <typename TD, typename T, typename... Types>
-    constexpr auto get(tuple<T, Types...>&& t) noexcept -> TD&& requires(type_unique_v<TD, T, Types...>) {
+    constexpr auto get(tuple<T, Types...>&& t) noexcept -> TD&& requires(type_app_unique<TD, T, Types...>) {
         if constexpr (std::is_same_v<TD, T>) {
             return std::forward<T>(t.m_ele);
         } else {
@@ -263,7 +233,7 @@ namespace mtl {
     }
 
     template <typename TD, typename T, typename... Types>
-    constexpr auto get(const tuple<T, Types...>& t) noexcept -> const TD& requires(type_unique_v<TD, T, Types...>) {
+    constexpr auto get(const tuple<T, Types...>& t) noexcept -> const TD& requires(type_app_unique<TD, T, Types...>) {
         if constexpr (std::is_same_v<TD, T>) {
             return t.m_ele;
         } else {
@@ -272,7 +242,7 @@ namespace mtl {
     }
 
     template <typename TD, typename T, typename... Types>
-    constexpr auto get(const tuple<T, Types...>&& t) noexcept -> const TD&& requires(type_unique_v<TD, T, Types...>) {
+    constexpr auto get(const tuple<T, Types...>&& t) noexcept -> const TD&& requires(type_app_unique<TD, T, Types...>) {
         if constexpr (std::is_same_v<TD, T>) {
             return std::forward<T>(t.m_ele);
         } else {
@@ -284,24 +254,18 @@ namespace mtl {
 // specialized algorithm
 namespace mtl {
     template <typename... Types>
-    constexpr auto swap(tuple<Types...>& lhs, tuple<Types...>& rhs) noexcept(noexcept(lhs.swap(rhs))) -> void {
-        return lhs.swap(rhs);
-    }
+    constexpr auto swap(tuple<Types...>& lhs, tuple<Types...>& rhs) noexcept(noexcept(lhs.swap(rhs))) -> void { return lhs.swap(rhs); }
 }  // namespace mtl
 
 // call function
 namespace mtl {
     namespace {
         template <typename F, typename Tup, size_t... Idx>
-        constexpr auto apply_impl(F&& f, Tup&& t, index_sequence<Idx...>) -> decltype(auto) {
-            return f(get<Idx>(std::forward<Tup>(t))...);
-        }
+        constexpr auto apply_impl(F&& f, Tup&& t, index_sequence<Idx...>) -> decltype(auto) { return f(get<Idx>(std::forward<Tup>(t))...); }
     }  // namespace
 
     template <typename F, typename Tup>
-    constexpr auto apply(F&& f, Tup&& t) -> decltype(auto) {
-        return apply_impl(std::forward<F>(f), std::forward<Tup>(t), make_index_sequence<tuple_size_v<std::remove_reference_t<Tup>>>());
-    }
+    constexpr auto apply(F&& f, Tup&& t) -> decltype(auto) { return apply_impl(std::forward<F>(f), std::forward<Tup>(t), make_index_sequence<tuple_size_v<std::remove_reference_t<Tup>>>()); }
 }  // namespace mtl
 
 // create function
@@ -324,9 +288,9 @@ namespace mtl {
         template <typename LTup, typename RTup>
         constexpr auto tuple_cat_impl(LTup&& l_tup, RTup&& r_tup) -> decltype(auto) {
             // 使用 apply 拆解所有参数
-            return apply(
+            return mtl::apply(
                 [&]<typename... LTypes>(LTypes&&... l_args) {
-                    return apply(
+                    return mtl::apply(
                         [&]<typename... RTypes>(RTypes&&... r_args) {
                             return tuple<LTypes..., RTypes...>{std::forward<LTypes>(l_args)..., std::forward<RTypes>(r_args)...};
                         },

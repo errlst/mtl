@@ -2,18 +2,8 @@
     参考：
         https://timsong-cpp.github.io/cppwp/n4861/pairs
 */
-
 #pragma once
 #include "utility.hpp"
-
-// 判断是否可隐式默认构造
-namespace {
-    template <typename T>
-    using const_ref_t = std::add_const_t<std::add_lvalue_reference_t<T>>;
-
-    template <typename T>
-    concept is_implicitly_default_constructible = requires { const_ref_t<T>{}; };
-}  // namespace
 
 // pair
 namespace mtl {
@@ -124,7 +114,7 @@ namespace mtl {
         T2 second;
     };
 
-    // TODO 搞不懂的显示推导指南
+    // ?? 搞不懂的显示推导指南
     template <typename T1, typename T2>
     pair(T1, T2) -> pair<T1, T2>;
 
@@ -149,7 +139,6 @@ namespace mtl {
     template <typename T1, typename T2>
     requires(std::is_swappable_v<T1> && std::is_swappable_v<T2>)
     constexpr auto swap(pair<T1, T2>& lhs, pair<T1, T2>& rhs) noexcept(noexcept(lhs.swap(rhs))) -> void { lhs.swap(rhs); }
-
 }  // namespace mtl
 
 // make function

@@ -1,8 +1,6 @@
 /*
     参考：
         https://timsong-cpp.github.io/cppwp/n4861/optional
-
-    TODO 为实现哈希支持
 */
 #pragma once
 #include "utility.hpp"
@@ -14,15 +12,10 @@ namespace mtl {
 
 // nullopt
 namespace mtl {
-    // nullopt_t 不能拥有默认构造函数，使用外部不可见类，辅助构造
-    namespace {
-        struct nullopt_t_helper {};
-    }  // namespace
-
     struct nullopt_t {
-        explicit constexpr nullopt_t(nullopt_t_helper) {}
+        explicit constexpr nullopt_t(int) {}
     };
-    inline constexpr auto nullopt = nullopt_t{nullopt_t_helper{}};
+    inline constexpr auto nullopt = nullopt_t{0};
 }  // namespace mtl
 
 // optional
