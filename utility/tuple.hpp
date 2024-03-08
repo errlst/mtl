@@ -3,8 +3,6 @@
         https://timsong-cpp.github.io/cppwp/n4861/tuple
         https://zhuanlan.zhihu.com/p/143715615                          tuple 实现
         https://www.zhihu.com/question/524545946/answer/2412805155      tuple_cat 实现
-
-    未实现用户自定义分配器相关内容
 */
 #pragma once
 #include "utility.hpp"
