@@ -1,6 +1,5 @@
 /*
-    参考：
-        https://timsong-cpp.github.io/cppwp/n4861/pairs
+    https://timsong-cpp.github.io/cppwp/n4861/pairs
 */
 #pragma once
 #include "utility.hpp"

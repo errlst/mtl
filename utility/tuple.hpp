@@ -1,8 +1,7 @@
 /*
-    参考:
-        https://timsong-cpp.github.io/cppwp/n4861/tuple
-        https://zhuanlan.zhihu.com/p/143715615                          tuple 实现
-        https://www.zhihu.com/question/524545946/answer/2412805155      tuple_cat 实现
+    https://timsong-cpp.github.io/cppwp/n4861/tuple
+    https://zhuanlan.zhihu.com/p/143715615                          tuple 实现
+    https://www.zhihu.com/question/524545946/answer/2412805155      tuple_cat 实现
 */
 #pragma once
 #include "utility.hpp"
@@ -19,12 +18,6 @@ namespace mtl {
     class tuple<T, Types...> : public tuple<Types...> {
       private:
         using base = tuple<Types...>;
-
-        template <typename... UTypes>
-        friend class tuple;
-
-        // template <size_t, typename _T>
-        // friend constexpr auto get(_T&&) noexcept -> decltype(auto);
 
       public:  // 构造
         constexpr explicit(std::is_default_constructible_v<T>)
@@ -211,7 +204,6 @@ namespace mtl {
         }
     }
 
-    // 使用单独的递归模板检查是否存在相同元素
     template <typename TD, typename T, typename... Types>
     constexpr auto get(tuple<T, Types...>& t) noexcept -> TD& requires(type_app_unique<TD, T, Types...>) {
         if constexpr (std::is_same_v<TD, T>) {
@@ -257,13 +249,11 @@ namespace mtl {
 
 // call function
 namespace mtl {
-    namespace {
-        template <typename F, typename Tup, size_t... Idx>
-        constexpr auto apply_impl(F&& f, Tup&& t, index_sequence<Idx...>) -> decltype(auto) { return f(get<Idx>(std::forward<Tup>(t))...); }
-    }  // namespace
+    template <typename F, typename Tup, size_t... Idx>
+    constexpr auto _tuple_apply_impl(F&& f, Tup&& t, index_sequence<Idx...>) -> decltype(auto) { return f(get<Idx>(std::forward<Tup>(t))...); }
 
     template <typename F, typename Tup>
-    constexpr auto apply(F&& f, Tup&& t) -> decltype(auto) { return apply_impl(std::forward<F>(f), std::forward<Tup>(t), make_index_sequence<tuple_size_v<std::remove_reference_t<Tup>>>()); }
+    constexpr auto apply(F&& f, Tup&& t) -> decltype(auto) { return _tuple_apply_impl(std::forward<F>(f), std::forward<Tup>(t), make_index_sequence<tuple_size_v<std::remove_reference_t<Tup>>>()); }
 }  // namespace mtl
 
 // create function
@@ -277,33 +267,31 @@ namespace mtl {
     template <typename... Types>
     constexpr auto tie(Types&... args) -> tuple<Types&...> { return {args...}; }
 
-    namespace {
-        constexpr auto tuple_cat_impl() -> tuple<> { return {}; }
+    constexpr auto _tuple_tuple_cat_impl() -> tuple<> { return {}; }
 
-        template <typename Tup>
-        constexpr auto tuple_cat_impl(Tup&& t) -> decltype(auto) { return std::forward<Tup>(t); }
+    template <typename Tup>
+    constexpr auto _tuple_tuple_cat_impl(Tup&& t) -> decltype(auto) { return std::forward<Tup>(t); }
 
-        template <typename LTup, typename RTup>
-        constexpr auto tuple_cat_impl(LTup&& l_tup, RTup&& r_tup) -> decltype(auto) {
-            // 使用 apply 拆解所有参数
-            return mtl::apply(
-                [&]<typename... LTypes>(LTypes&&... l_args) {
-                    return mtl::apply(
-                        [&]<typename... RTypes>(RTypes&&... r_args) {
-                            return tuple<LTypes..., RTypes...>{std::forward<LTypes>(l_args)..., std::forward<RTypes>(r_args)...};
-                        },
-                        std::forward<RTup>(r_tup));
-                },
-                std::forward<LTup>(l_tup));
-        }
+    template <typename LTup, typename RTup>
+    constexpr auto _tuple_tuple_cat_impl(LTup&& l_tup, RTup&& r_tup) -> decltype(auto) {
+        // 使用 apply 拆解所有参数
+        return mtl::apply(
+            [&]<typename... LTypes>(LTypes&&... l_args) {
+                return mtl::apply(
+                    [&]<typename... RTypes>(RTypes&&... r_args) {
+                        return tuple<LTypes..., RTypes...>{std::forward<LTypes>(l_args)..., std::forward<RTypes>(r_args)...};
+                    },
+                    std::forward<RTup>(r_tup));
+            },
+            std::forward<LTup>(l_tup));
+    }
 
-        template <typename LTup, typename RTup, typename... Tups>
-        constexpr auto tuple_cat_impl(LTup&& l_tup, RTup&& r_tup, Tups&&... tups) -> decltype(auto) {
-            return tuple_cat_impl(tuple_cat_impl(std::forward<LTup>(l_tup), std::forward<RTup>(r_tup)),
-                                  std::forward<Tups>(tups)...);
-        }
-    }  // namespace
+    template <typename LTup, typename RTup, typename... Tups>
+    constexpr auto _tuple_tuple_cat_impl(LTup&& l_tup, RTup&& r_tup, Tups&&... tups) -> decltype(auto) {
+        return _tuple_tuple_cat_impl(_tuple_tuple_cat_impl(std::forward<LTup>(l_tup), std::forward<RTup>(r_tup)),
+                                     std::forward<Tups>(tups)...);
+    }
 
     template <typename... Tups>
-    constexpr auto tuple_cat(Tups&&... tups) -> decltype(auto) { return tuple_cat_impl(std::forward<Tups>(tups)...); }
+    constexpr auto tuple_cat(Tups&&... tups) -> decltype(auto) { return _tuple_tuple_cat_impl(std::forward<Tups>(tups)...); }
 }  // namespace mtl

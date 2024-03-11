@@ -58,24 +58,6 @@ namespace mtl {
     constexpr auto type_idx_v = type_idx<TD, 0, Types...>();
 }  // namespace mtl
 
-// 最大尺寸的类型
-namespace mtl {
-    namespace {
-        template <typename T>
-        constexpr auto max_type() -> T;
-
-        template <typename T, typename U>
-        constexpr auto max_type() -> std::conditional_t<sizeof(T) >= sizeof(U), T, U>;
-
-        template <typename T, typename... Types>
-        requires(sizeof...(Types) >= 2)
-        constexpr auto max_type() -> decltype(max_type<T, decltype(max_type<Types...>())>());
-    }  // namespace
-
-    template <typename... Types>
-    using max_type_t = decltype(max_type<Types...>());
-}  // namespace mtl
-
 // 判断是否可隐式默认构造
 namespace mtl {
     namespace {

@@ -1,9 +1,8 @@
 /*
-    参考：
-        https://timsong-cpp.github.io/cppwp/n4861/variant
-        https://stackoverflow.com/questions/39547777/implementing-stdvariant-converting-constructor-or-how-to-find-first-overloa 选择转换构造函数最适合的类型
-        https://zhuanlan.zhihu.com/p/675735999 variant 实现
-        https://mpark.github.io/programming/2015/07/07/variant-visitation/  visit 实现
+    https://timsong-cpp.github.io/cppwp/n4861/variant
+    https://stackoverflow.com/questions/39547777/implementing-stdvariant-converting-constructor-or-how-to-find-first-overloa 选择转换构造函数最适合的类型
+    https://zhuanlan.zhihu.com/p/675735999 variant 实现
+    https://mpark.github.io/programming/2015/07/07/variant-visitation/  visit 实现
 */
 #pragma once
 #include "utility.hpp"
@@ -125,13 +124,7 @@ namespace mtl {
     }
 
     template <size_t Idx, typename... Types, typename U, typename... Args>
-    constexpr auto _variant_data_assign(_variant_data<Types...>& v, std::initializer_list<U> lst, Args&&... args) {
-        if constexpr (Idx == 0) {
-            std::construct_at(&v.val, lst, std::forward<Args>(args)...);
-        } else {
-            _variant_data_assign(v.next, lst, std::forward<Args>(args)...);
-        }
-    }
+    constexpr auto _variant_data_assign(_variant_data<Types...>& v, std::initializer_list<U> lst, Args&&... args) { _variant_data_assign(v, lst, std::forward<Args>(args)...); }
 
     template <size_t Idx, typename... Types>
     constexpr auto _variant_data_get(_variant_data<Types...>& v) -> nth_type_t<Idx, Types...>& {
@@ -431,7 +424,7 @@ namespace mtl {
                 dispatchers[1][0] = dispatcher<T2,U1>
                 dispatchers[1][1] = dispatcher<T2,U2>
     */
-    
+
     // 生成单个 dispatcher
     template <typename F, typename... Variants, size_t... Idxs>
     constexpr auto _variant_make_dispatcher(index_sequence<Idxs...>) {

@@ -66,6 +66,8 @@ namespace mtl {
 
     template <typename... Types>
     class variant;
+
+    class any;
 }  // namespace mtl
 
 // tuple size

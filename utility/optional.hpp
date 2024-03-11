@@ -1,6 +1,5 @@
 /*
-    参考：
-        https://timsong-cpp.github.io/cppwp/n4861/optional
+    https://timsong-cpp.github.io/cppwp/n4861/optional
 */
 #pragma once
 #include "utility.hpp"
@@ -152,9 +151,7 @@ namespace mtl {
 
         template <typename U, typename... Args>
         requires(std::is_constructible_v<T, std::initializer_list<U>, Args && ...>)
-        auto emplace(std::initializer_list<U> lst, Args&&... args) -> T& {
-            return emplace(std::move(lst), args...);
-        }
+        auto emplace(std::initializer_list<U> lst, Args&&... args) -> T& { return emplace(std::move(lst), args...); }
 
         // swap
       public:
