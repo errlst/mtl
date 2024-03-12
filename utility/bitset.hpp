@@ -49,6 +49,7 @@ namespace mtl {
     template <size_t N>
     class bitset {
         static_assert(std::endian::native == std::endian::little, "bitset only work in little endian");
+        static constexpr auto BYTE_COUNT = _bitset_floor_byte_count(N);
 
       public:
         class reference;
@@ -59,11 +60,10 @@ namespace mtl {
 
         constexpr bitset(unsigned long long val) noexcept {
             auto bit_count = std::min(sizeof(val) * BITS_PER_BYTE, N);
-            auto byte_count = _bitset_floor_byte_count(bit_count);
             // 假设 val 对应的二进制序列为 00000000 00000000 11110000 00001111，byte_count=2
             // 则 *val_ptr=11110000，*(val_ptr-1)=00001111
-            uint8_t *val_ptr = reinterpret_cast<uint8_t *>(&val) + byte_count - 1;
-            for (auto i = 0; i < byte_count; ++i) {
+            uint8_t *val_ptr = reinterpret_cast<uint8_t *>(&val) + BYTE_COUNT - 1;
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
                 m_bytes[i] = *(val_ptr--);
             }
             // 对于上述假设的 val，经过 for 循环后，m_bytes[0]=11110000，m_bytes[1]=00001111
@@ -139,6 +139,84 @@ namespace mtl {
             return res;
         }
 
+        // relational operator
+      public:
+        auto operator==(const bitset &o) -> bool {
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
+                if (m_bytes[i] != o.m_bytes[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // bit shift operator
+      public:
+        auto operator<<=(size_t pos) -> bitset & {
+            // 基本思路：合并两个 byte 为 word，对 word 进行移位，再返回给 byte
+            if (pos > BITS_PER_BYTE) {
+                (*this) <<= (pos - BITS_PER_BYTE);
+                pos = BITS_PER_BYTE;
+            }
+            uint8_t bytes[BYTE_COUNT]{0};
+            auto byte = bytes + BYTE_COUNT - 1;
+            auto m_byte = m_bytes + BYTE_COUNT - 1;
+            auto word = uint16_t{0};
+            auto word_r = reinterpret_cast<uint8_t *>(&word), word_l = word_r + 1;  // 小端，因此 word=word_r-word_l
+            for (auto i = 0; i < BYTE_COUNT - 1; ++i) {
+                *word_r = *m_byte;
+                *word_l = *(--m_byte);
+                word <<= pos;
+                *(byte) |= *word_r;
+                *(--byte) |= *word_l;
+            }
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
+                m_bytes[i] = bytes[i];
+            }
+            return *this;
+        }
+
+        auto operator<<(size_t pos) -> bitset {
+            auto res = bitset{};
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
+                res.m_bytes[i] = m_bytes[i];
+            }
+            res <<= pos;
+            return res;
+        }
+
+        auto operator>>=(size_t pos) -> bitset & {
+            if (pos > BITS_PER_BYTE) {
+                (*this) >>= (pos - BITS_PER_BYTE);
+                pos = 8;
+            }
+            uint8_t bytes[BYTE_COUNT]{0};
+            auto byte = bytes;
+            auto m_byte = m_bytes;
+            auto word = uint16_t{0};
+            auto word_r = reinterpret_cast<uint16_t *>(&word), word_l = word_r + 1;
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
+                *word_l = *m_byte;
+                *word_r = *(++m_byte);
+                word >>= pos;
+                *(byte) |= *word_l;
+                *(++byte) |= *word_r;
+            }
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
+                m_bytes[i] = bytes[i];
+            }
+            return *this;
+        }
+
+        auto operator>>(size_t pos) -> bitset {
+            auto res = bitset{};
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
+                res.m_bytes[i] = m_bytes[i];
+            }
+            res >>= pos;
+            return res;
+        }
+
         // to_xxx
       public:
         template <typename CharT = char, typename Traits = std::char_traits<CharT>,
@@ -146,8 +224,7 @@ namespace mtl {
         auto to_string(CharT zero = '0', CharT one = '1') -> std::basic_string<CharT, Traits, Allocator> {
             auto res = std::basic_string<CharT, Traits, Allocator>(N, zero);
             auto pos = res.end() - 1;
-            auto byte_count = _bitset_floor_byte_count(N) - 1;  // 除了 m_bytes[0] 之外的完整字节数
-            for (auto i = byte_count; i > 0; --i) {
+            for (auto i = BYTE_COUNT; i > 0; --i) {
                 auto mask = 1;
                 for (auto j = 0; j < BITS_PER_BYTE; ++j, --pos, mask <<= 1) {
                     if ((m_bytes[i] & mask) != 0) {
@@ -171,7 +248,7 @@ namespace mtl {
         // modifier
       public:
         auto set() noexcept -> bitset & {
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
                 m_bytes[i] = 255;
             }
             return *this;
@@ -186,7 +263,7 @@ namespace mtl {
         }
 
         auto reset() noexcept -> bitset & {
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
                 m_bytes[i] = 0;
             }
             return *this;
@@ -195,7 +272,7 @@ namespace mtl {
         auto reset(size_t pos) { set(pos, false); }
 
         auto flip() noexcept -> bitset & {
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
                 m_bytes[i] = ~m_bytes[i];
             }
             return *this;
@@ -212,18 +289,18 @@ namespace mtl {
         // access
       public:
         auto operator[](size_t pos) -> reference {
-            return reference{const_cast<uint8_t *>(m_bytes + _bitset_floor_byte_count(N) - 1 - _bitset_ceil_byte_count(pos)),
+            return reference{const_cast<uint8_t *>(m_bytes + BYTE_COUNT - 1 - _bitset_ceil_byte_count(pos)),
                              static_cast<uint8_t>(pos % BITS_PER_BYTE)};
         }
 
         constexpr auto operator[](size_t pos) const -> reference {
-            return reference{const_cast<uint8_t *>(m_bytes + _bitset_floor_byte_count(N) - 1 - _bitset_ceil_byte_count(pos)),
+            return reference{const_cast<uint8_t *>(m_bytes + BYTE_COUNT - 1 - _bitset_ceil_byte_count(pos)),
                              static_cast<uint8_t>(pos % BITS_PER_BYTE)};
         }
 
         auto count() const noexcept -> size_t {
             size_t res = 0;
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < BYTE_COUNT; ++i) {
                 auto byte = m_bytes[i];
                 for (auto j = 0; j < 8; ++j, byte >>= 1) {
                     res += ((byte & 1) != 0);
@@ -249,7 +326,7 @@ namespace mtl {
 
       public:
         // m_bytes[0] 存放二进制序列的高位，且对无效的比特补零
-        uint8_t m_bytes[_bitset_floor_byte_count(N)]{0};
+        uint8_t m_bytes[BYTE_COUNT]{0};
     };
 }  // namespace mtl
 
