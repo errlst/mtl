@@ -3,6 +3,7 @@
 */
 #pragma once
 #include <iostream>
+#include <cstdint>
 
 // 类型出现的次数
 namespace mtl {

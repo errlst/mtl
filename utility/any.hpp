@@ -1,5 +1,6 @@
 /*
     https://timsong-cpp.github.io/cppwp/n4861/any
+    https://github.com/gcc-mirror/gcc/blob/master/libstdc%2B%2B-v3/include/std/any 借助类型擦除对存储的对象和类型进行管理
 */
 #pragma once
 #include "utility.hpp"

@@ -68,6 +68,9 @@ namespace mtl {
     class variant;
 
     class any;
+
+    template <size_t N>
+    class bitset;
 }  // namespace mtl
 
 // tuple size
