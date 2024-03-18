@@ -53,7 +53,7 @@ namespace mtl {
     using synth_three_way_result = decltype(synth_three_way(std::declval<T1&>(), std::declval<T2&>()));
 }  // namespace mtl
 
-// containers
+// utilities
 namespace mtl {
     template <typename T1, typename T2>
     struct pair;
@@ -71,6 +71,12 @@ namespace mtl {
 
     template <size_t N>
     class bitset;
+
+    template <typename T>
+    struct default_delete;
+
+    template <typename T, typename D = default_delete<T>>
+    class unique_ptr;
 }  // namespace mtl
 
 // tuple size

@@ -4,7 +4,7 @@
 
 auto main() -> int {
 
-    std::allocator<int> a;
+    std::unique_ptr<int> u;
     
     return 0;
 }

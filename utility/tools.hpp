@@ -60,15 +60,10 @@ namespace mtl {
     constexpr auto type_idx_v = type_idx<TD, 0, Types...>();
 }  // namespace mtl
 
-// 判断是否可隐式默认构造
+// 可隐式默认构造
 namespace mtl {
-    namespace {
-        template <typename T>
-        using const_ref_t = std::add_const_t<std::add_lvalue_reference_t<T>>;
-    }
-
     template <typename T>
-    concept is_implicitly_default_constructible = requires { const_ref_t<T>{}; };
+    concept is_implicitly_default_constructible = requires { std::add_const_t<std::add_lvalue_reference_t<T>>{}; };
 }  // namespace mtl
 
 // 根据优先级选择有效的类型
@@ -83,3 +78,9 @@ namespace mtl {
     template <typename Default, typename Priority>
     using default_or_t = decltype(default_or<Default, Priority>(0));
 }  // namespace mtl
+
+// 完整类型
+namespace mtl {
+    template <typename T>
+    constexpr bool is_complete = (!std::is_void_v<T>)&&(sizeof(T));
+}
