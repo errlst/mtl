@@ -1,11 +1,10 @@
-#include "utility/pair.hpp"
-#include "utility/tuple.hpp"
-#include "utility/optional.hpp"
-#include "utility/variant.hpp"
-#include "utility/any.hpp"
-#include "utility/bitset.hpp"
-#include <bitset>
+#include <iostream>            // IWYU pragma: keep
+#include "utility/memory.hpp"  // IWYU pragma: keep
+#include <memory>              // IWYU pragma: keep
 
 auto main() -> int {
+
+    std::allocator<int> a;
+    
     return 0;
 }

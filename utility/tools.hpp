@@ -2,8 +2,9 @@
     一些通用工具，与标准无关
 */
 #pragma once
-#include <iostream>
-#include <cstdint>
+#include <iostream>  // IWYU pragma: keep
+#include <cstdint>   // IWYU pragma: keep
+#include <numeric>   // IWYU pragma: keep
 
 // 类型出现的次数
 namespace mtl {
@@ -68,4 +69,17 @@ namespace mtl {
 
     template <typename T>
     concept is_implicitly_default_constructible = requires { const_ref_t<T>{}; };
+}  // namespace mtl
+
+// 根据优先级选择有效的类型
+namespace mtl {
+    // 如果两者同时有效，优先选择 int 重载版本
+    template <typename Default, typename Priority>
+    constexpr auto default_or(int) -> Priority;
+
+    template <typename Default, typename Priority>
+    constexpr auto default_or(long) -> Default;
+
+    template <typename Default, typename Priority>
+    using default_or_t = decltype(default_or<Default, Priority>(0));
 }  // namespace mtl

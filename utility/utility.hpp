@@ -1,5 +1,5 @@
 #pragma once
-#include "tools.hpp"
+#include "tools.hpp"  // IWYU pragma: keep
 
 // piecewise construct
 namespace mtl {
