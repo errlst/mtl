@@ -7,33 +7,43 @@
 
 // pointer traits
 namespace mtl {
-    template <typename Ptr>
-    auto _pointer_traits_element_type(int) -> Ptr::element_type;
+    namespace pointer_traits_detal {
+        template <typename Ptr>
+        auto ele_type_(int) -> Ptr::element_type;
+        template <template <typename, typename...> typename Ptr, typename T, typename... Args>
+        auto ele_type_(Ptr<T, Args...>) -> T;
+        template <typename Ptr>
+        auto ele_type_(long) -> decltype(ele_type_(Ptr{}));
+        template <typename Ptr>
+        using ele_type = decltype(ele_type_<Ptr>(0));
 
-    template <template <typename, typename...> typename Ptr, typename T, typename... Args>
-    auto _pointer_traits_element_type(Ptr<T, Args...>) -> T;
+        template <typename Ptr>
+        auto diff_type_(int) -> Ptr::difference_type;
+        template <typename Ptr>
+        auto diff_type_(long) -> ptrdiff_t;
+        template <typename Ptr>
+        using diff_type = decltype(diff_type_<Ptr>(0));
 
-    template <typename Ptr>
-    auto _pointer_traits_element_type(long) -> decltype(_pointer_traits_element_type(Ptr{}));
+        template <typename Ptr, typename U>
+        auto rebind_type_(int) -> typename Ptr::template rebind<U>;
+        template <typename U, template <typename, typename...> typename Ptr, typename T, typename... Args>
+        auto rebind_type_(Ptr<T, Args...>) -> Ptr<U, Args...>;
+        template <typename Ptr, typename U>
+        auto rebind_type_(long) -> decltype(rebind_type_<U>(Ptr{}));
+        template <typename Ptr, typename U>
+        using rebind_type = decltype(rebind_type_<Ptr, U>(0));
 
-    template <typename Ptr, typename U>
-    auto _pointer_traits_rebind_type(int) -> typename Ptr::template rebind<U>;
-
-    template <typename U, template <typename, typename...> typename Ptr, typename T, typename... Args>
-    auto _pointer_traits_rebind_type(Ptr<T, Args...>) -> Ptr<U, Args...>;
-
-    template <typename Ptr, typename U>
-    auto _pointer_traits_rebind_type(long) -> decltype(_pointer_traits_rebind_type<U>(Ptr{}));
+    }  // namespace pointer_traits_detal
 
     template <typename Ptr>
     struct pointer_traits {
         using pointer = Ptr;
-        using element_type = decltype(_pointer_traits_element_type<Ptr>(0));
-        using difference_type = default_or_t<ptrdiff_t, typename Ptr::difference_type>;
-
+        using element_type = pointer_traits_detal::ele_type<Ptr>;
+        using difference_type = pointer_traits_detal::diff_type<Ptr>;
         template <typename U>
-        using rebind = decltype(_pointer_traits_rebind_type<Ptr, U>(0));
+        using rebind = pointer_traits_detal::rebind_type<Ptr, U>;
 
+      public:
         static auto pointer_to(element_type& e) -> pointer {
             return Ptr::pointer_to(e);
         }
@@ -44,10 +54,10 @@ namespace mtl {
         using pointer = T*;
         using element_type = T;
         using difference_type = ptrdiff_t;
-
         template <typename U>
         using rebind = U*;
 
+      public:
         static constexpr auto pointer_to(element_type& e) noexcept -> pointer {
             return std::addressof(e);
         }
@@ -80,42 +90,80 @@ namespace mtl {
 
 // allocator traits
 namespace mtl {
-    template <typename Allocator, typename T>
-    constexpr auto _allocator_traits_rebind(int) -> typename Allocator::template rebind<T>::other;
+    namespace _allocator_traits_detail {
+        template <typename Alc>
+        auto ptr_(int) -> Alc::pointer;
+        template <typename Alc>
+        auto ptr_(long) -> Alc::value_type*;
+        template <typename Alc>
+        using ptr = decltype(ptr_<Alc>(0));
 
-    template <template <typename...> typename Allocator, typename T, typename... Types>
-    constexpr auto _allocator_traits_rebind(Allocator<Types...>) -> Allocator<T, Types...>;
+        template <typename Alc>
+        auto cptr_(int) -> Alc::const_pointer;
+        template <typename Alc>
+        auto cptr_(long) -> pointer_traits<ptr<Alc>>::template rebind<const typename Alc::value_type>;
+        template <typename Alc>
+        using cptr = decltype(cptr_<Alc>(0));
 
-    template <typename Allocator, typename T>
-    constexpr auto _allocator_traits_rebind(long) -> decltype(_allocator_traits_rebind<Allocator, T>(Allocator{}));
+        template <typename Alc>
+        auto vptr_(int) -> Alc::void_pointer;
+        template <typename Alc>
+        auto vptr_(long) -> pointer_traits<ptr<Alc>>::template rebind<void>;
+        template <typename Alc>
+        using vptr = decltype(vptr_<Alc>(0));
 
-    template <typename Allocator>
+        template <typename Alc>
+        auto cvptr_(int) -> Alc::const_void_pointer;
+        template <typename Alc>
+        auto cvptr_(long) -> pointer_traits<ptr<Alc>>::template rebind<const void>;
+        template <typename Alc>
+        using cvptr = decltype(cvptr_<Alc>(0));
+
+        template <typename Alc>
+        auto diff_type_(int) -> Alc::difference_type;
+        template <typename Alc>
+        auto diff_type_(long) -> pointer_traits<ptr<Alc>>::difference_type;
+        template <typename Alc>
+        using diff_type = decltype(diff_type_<Alc>(0));
+
+        template <typename Alc>
+        auto size_type_(int) -> Alc::size_type;
+        template <typename Alc>
+        auto size_type_(long) -> std::make_unsigned_t<diff_type<Alc>>;
+        template <typename Alc>
+        using size_type = decltype(size_type_<Alc>(0));
+    }  // namespace _allocator_traits_detail
+
+    template <typename Alloc>
     struct allocator_traits {
-        using allocator_type = Allocator;
-        using value_type = Allocator::value_type;
-        using pointer = default_or_t<value_type*, typename Allocator::pointer>;
-        using const_pointer = default_or_t<typename pointer_traits<pointer>::template rebind<const value_type>, typename Allocator::const_pointer>;
-        using void_pointer = default_or_t<typename pointer_traits<pointer>::template rebind<void>, typename Allocator::void_pointer>;
-        using const_void_pointer = default_or_t<typename pointer_traits<pointer>::template rebind<const void>, typename Allocator::const_void_pointer>;
-        using difference_type = default_or_t<typename pointer_traits<pointer>::difference_type, typename Allocator::difference_type>;
-        using size_type = default_or_t<std::make_unsigned_t<difference_type>, typename Allocator::size_type>;
-        using propagate_on_container_copy_assignment = default_or_t<std::false_type, typename Allocator::propagate_on_container_copy_assignment>;
-        using propagate_on_container_move_assignment = default_or_t<std::false_type, typename Allocator::propagate_on_container_move_assignment>;
-        using propagate_on_container_swap = default_or_t<std::false_type, typename Allocator::propagate_on_container_swap>;
-        using is_always_equal = default_or_t<typename std::is_empty<Allocator>::type, typename Allocator::is_always_equal>;
+      private:
+      public:
+        using allocator_type = Alloc;
+        using value_type = Alloc::value_type;
+        using pointer = _allocator_traits_detail::ptr<Alloc>;
+        using const_pointer = _allocator_traits_detail::cptr<Alloc>;
+        using void_pointer = _allocator_traits_detail::vptr<Alloc>;
+        using const_void_pointer = _allocator_traits_detail::cvptr<Alloc>;
+        using difference_type = _allocator_traits_detail::diff_type<Alloc>;
+        using size_type = _allocator_traits_detail::size_type<Alloc>;
+        // 剩下的不想写了
+        // using propagate_on_container_copy_assignment =
+        // using propagate_on_container_move_assignment =
+        // using propagate_on_container_swap =
+        // using is_always_equal =
 
         template <typename T>
-        using rebind_alloc = decltype(_allocator_traits_rebind<Allocator, T>(0));
+        using rebind_alloc = decltype(_allocator_traits_rebind<Alloc, T>(0));
 
       public:
-        [[nodiscard]] static constexpr auto allocate(Allocator& a, size_type n) -> pointer { return a.allocate(n); }
+        [[nodiscard]] static constexpr auto allocate(Alloc& a, size_type n) -> pointer { return a.allocate(n); }
 
-        [[nodiscard]] static constexpr auto allocate(Allocator& a, size_t n, const_void_pointer hint) -> pointer { return a.allocate(n, hint); }
+        [[nodiscard]] static constexpr auto allocate(Alloc& a, size_t n, const_void_pointer hint) -> pointer { return a.allocate(n, hint); }
 
-        static constexpr auto deallocate(Allocator& a, pointer p, size_type n) -> void { a.deallocate(p, n); }
+        static constexpr auto deallocate(Alloc& a, pointer p, size_type n) -> void { a.deallocate(p, n); }
 
         template <typename T, typename... Args>
-        static constexpr auto construct(Allocator& a, T* p, Args&&... args) -> void {
+        static constexpr auto construct(Alloc& a, T* p, Args&&... args) -> void {
             if constexpr (requires { a.construct(p, std::forward<Args>(args)...); }) {
                 a.construct(p, std::forward<Args>(args)...);
             } else {
@@ -124,7 +172,7 @@ namespace mtl {
         }
 
         template <typename T>
-        static constexpr auto destroy(Allocator& a, T* p) -> void {
+        static constexpr auto destroy(Alloc& a, T* p) -> void {
             if constexpr (requires { a.destroy(p); }) {
                 a.destroy(p);
             } else {
@@ -132,9 +180,9 @@ namespace mtl {
             }
         }
 
-        static constexpr auto max_size(const Allocator& a) noexcept -> size_type { return a.max_size(); }
+        static constexpr auto max_size(const Alloc& a) noexcept -> size_type { return a.max_size(); }
 
-        static constexpr auto select_on_container_copy_construction(const Allocator& a) -> Allocator {
+        static constexpr auto select_on_container_copy_construction(const Alloc& a) -> Alloc {
             if constexpr (requires { a.select_on_container_copy_construction(); }) {
                 return a.select_on_container_copy_construction();
             } else {

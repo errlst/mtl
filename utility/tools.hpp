@@ -66,19 +66,6 @@ namespace mtl {
     concept is_implicitly_default_constructible = requires { std::add_const_t<std::add_lvalue_reference_t<T>>{}; };
 }  // namespace mtl
 
-// 根据优先级选择有效的类型
-namespace mtl {
-    // 如果两者同时有效，优先选择 int 重载版本
-    template <typename Default, typename Priority>
-    constexpr auto default_or(int) -> Priority;
-
-    template <typename Default, typename Priority>
-    constexpr auto default_or(long) -> Default;
-
-    template <typename Default, typename Priority>
-    using default_or_t = decltype(default_or<Default, Priority>(0));
-}  // namespace mtl
-
 // 完整类型
 namespace mtl {
     template <typename T>
