@@ -214,11 +214,11 @@ namespace mtl {
         constexpr ~allocator() = default;
 
       public:
-        [[nodiscard]] constexpr auto allocatr(size_t n) -> T* {
+        [[nodiscard]] constexpr auto allocate(size_t n) -> T* {
             if (std::numeric_limits<size_t>::max() / sizeof(T) < n) {
                 throw std::bad_array_new_length{};
             }
-            return ::operator new(n * sizeof(T));
+            return static_cast<T*>(::operator new(n * sizeof(T)));
         }
 
         constexpr auto deallocate(T* p, size_t n) -> void {

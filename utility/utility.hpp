@@ -75,8 +75,14 @@ namespace mtl {
     template <typename T>
     struct default_delete;
 
+    template <typename T>
+    struct allocator;
+
     template <typename T, typename D = default_delete<T>>
     class unique_ptr;
+
+    template <typename T>
+    class shared_ptr;
 }  // namespace mtl
 
 // tuple size
