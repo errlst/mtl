@@ -1,5 +1,5 @@
 #pragma once
-#include "tools.hpp"  // IWYU pragma: keep
+#include "tools.hpp" // IWYU pragma: keep
 
 // piecewise construct
 namespace mtl {
@@ -8,7 +8,7 @@ namespace mtl {
     };
 
     constexpr auto piecewise_construct = piecewise_construct_t{};
-}  // namespace mtl
+} // namespace mtl
 
 // inplace
 namespace mtl {
@@ -32,11 +32,11 @@ namespace mtl {
 
     template <size_t Idx>
     constexpr auto in_place_index = in_place_index_t<Idx>{};
-}  // namespace mtl
+} // namespace mtl
 
 // synth three way
 namespace mtl {
-    constexpr auto synth_three_way = []<typename T1, typename T2>(const T1& lhs, const T2& rhs) {
+    constexpr auto synth_three_way = []<typename T1, typename T2>(const T1 &lhs, const T2 &rhs) {
         if constexpr (std::three_way_comparable_with<T1, T2>) {
             return lhs <=> rhs;
         } else {
@@ -50,8 +50,8 @@ namespace mtl {
     };
 
     template <typename T1, typename T2>
-    using synth_three_way_result = decltype(synth_three_way(std::declval<T1&>(), std::declval<T2&>()));
-}  // namespace mtl
+    using synth_three_way_result = decltype(synth_three_way(std::declval<T1 &>(), std::declval<T2 &>()));
+} // namespace mtl
 
 // utilities
 namespace mtl {
@@ -83,7 +83,10 @@ namespace mtl {
 
     template <typename T>
     class shared_ptr;
-}  // namespace mtl
+
+    template <typename T>
+    class weak_ptr;
+} // namespace mtl
 
 // tuple size
 namespace mtl {
@@ -95,7 +98,7 @@ namespace mtl {
 
     template <typename T>
     inline constexpr auto tuple_size_v = tuple_size<T>::value;
-}  // namespace mtl
+} // namespace mtl
 
 // tuple element
 namespace mtl {
@@ -107,7 +110,7 @@ namespace mtl {
 
     template <size_t Idx, typename T>
     using tuple_element_t = tuple_element<Idx, T>::type;
-}  // namespace mtl
+} // namespace mtl
 
 // variant size
 namespace mtl {
@@ -119,7 +122,7 @@ namespace mtl {
 
     template <typename T>
     inline constexpr auto variant_size_v = variant_size<T>::value;
-}  // namespace mtl
+} // namespace mtl
 
 // variant alternative
 namespace mtl {
@@ -133,7 +136,7 @@ namespace mtl {
     using variant_alternative_t = variant_alternative<Idx, T>::type;
 
     inline constexpr size_t variant_npos = -1;
-}  // namespace mtl
+} // namespace mtl
 
 // integer sequence
 namespace mtl {
@@ -144,10 +147,10 @@ namespace mtl {
     };
 
     namespace {
-        template <typename T, T N>  // N!=0
+        template <typename T, T N> // N!=0
         struct make_integer_sequence_helper {
             template <T... Idxs>
-            constexpr static auto seq_inc(integer_sequence<T, Idxs...>)  // 序列后追加一个数字
+            constexpr static auto seq_inc(integer_sequence<T, Idxs...>) // 序列后追加一个数字
                 -> integer_sequence<T, Idxs..., sizeof...(Idxs)>;
 
             // 沿着 make_integer_sequence_helper 递归，每次递归使得 N-1，直到 N==0
@@ -157,12 +160,12 @@ namespace mtl {
             using type = decltype(seq_inc(typename make_integer_sequence_helper<T, N - 1>::type()));
         };
 
-        template <typename T, T N>  // N==0
-        requires(N == 0)
+        template <typename T, T N> // N==0
+            requires(N == 0)
         struct make_integer_sequence_helper<T, N> {
             using type = integer_sequence<T>;
         };
-    }  // namespace
+    } // namespace
 
     template <typename T, T N>
     using make_integer_sequence = typename make_integer_sequence_helper<T, N>::type;
@@ -172,4 +175,4 @@ namespace mtl {
 
     template <size_t N>
     using make_index_sequence = typename make_integer_sequence_helper<size_t, N>::type;
-}  // namespace mtl
+} // namespace mtl
