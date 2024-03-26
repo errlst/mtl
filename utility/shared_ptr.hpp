@@ -14,7 +14,7 @@ namespace mtl {
     struct _shared_ptr_ctlblk {
       public:
         using element_type = std::remove_extent_t<T>;
-        using deleter = std::function<void(element_type *)>; // deleter::operator()
+        using deleter = std::function<void(element_type *)>; // 通过 deleter::operator()(ptr) 进行删除器操作
 
       public:
         _shared_ptr_ctlblk()
@@ -25,12 +25,12 @@ namespace mtl {
 
       public:
         auto inc_s() {
-            auto lock = std::lock_guard<std::mutex>{m_mut};
+            auto lock = std::lock_guard{m_mut};
             ++s_count;
         }
 
         auto dec_s() {
-            auto lock = std::lock_guard<std::mutex>{m_mut};
+            auto lock = std::lock_guard{m_mut};
             if (--s_count == 0 && ptr) {
                 del(ptr);
                 if (w_count == 0) {
@@ -40,12 +40,12 @@ namespace mtl {
         }
 
         auto inc_w() {
-            auto lock = std::lock_guard<std::mutex>{m_mut};
+            auto lock = std::lock_guard{m_mut};
             ++w_count;
         }
 
         auto dec_w() {
-            auto lock = std::lock_guard<std::mutex>{m_mut};
+            auto lock = std::lock_guard{m_mut};
             if (--w_count == 0 && s_count == 0) {
                 delete this;
             }
@@ -56,7 +56,7 @@ namespace mtl {
         deleter del;
         size_t s_count{0};
         size_t w_count{0};
-        std::mutex m_mut; //
+        std::mutex m_mut; // 保证 inc_x 和 dec_x 为原子操作
     };
 } // namespace mtl
 
@@ -71,17 +71,83 @@ namespace mtl {
       public:
         constexpr weak_ptr() noexcept {};
 
+        weak_ptr(const weak_ptr &w) noexcept : m_ctlblk(w.m_ctlblk) {
+            if (m_ctlblk) {
+                m_ctlblk->inc_w();
+            }
+        }
+
+        template <typename U>
+        weak_ptr(const weak_ptr<U> &w) noexcept : m_ctlblk(w.m_ctlblk) {
+            if (m_ctlblk) {
+                m_ctlblk->inc_w();
+            }
+        }
+
+        template <typename U>
+        weak_ptr(const shared_ptr<U> &s) noexcept : m_ctlblk(s.m_ctlblk) {
+            if (m_ctlblk) {
+                m_ctlblk->inc_w();
+            }
+        }
+
+        weak_ptr(weak_ptr &&w) noexcept {
+            if (m_ctlblk) {
+                m_ctlblk->dec_w();
+            }
+            m_ctlblk = w.m_ctlblk;
+            w.m_ctlblk = nullptr;
+        }
+
+        template <typename U>
+        weak_ptr(weak_ptr<U> &&w) noexcept {
+            if (m_ctlblk) {
+                m_ctlblk->dec_w();
+            }
+            m_ctlblk = w.m_ctlblk;
+            w.m_ctlblk = nullptr;
+        }
+
         ~weak_ptr() {
             if (m_ctlblk) {
                 m_ctlblk->dec_w();
             }
         }
 
+        // assignments
+      public:
+        auto operator=(const weak_ptr &w) noexcept -> weak_ptr & {
+            weak_ptr(w).swap(*this);
+            return *this;
+        }
+
+        template <typename U>
+        auto operator=(const weak_ptr<U> &w) noexcept -> weak_ptr & {
+            weak_ptr(w).swap(*this);
+            return *this;
+        }
+
+        template <typename U>
+        auto operator=(const shared_ptr<U> &s) noexcept -> weak_ptr & {
+            weak_ptr(s).swap(*this);
+            return *this;
+        }
+
+        auto operator=(weak_ptr &&w) noexcept -> weak_ptr & {
+            weak_ptr(std::move(w)).swap(*this);
+            return *this;
+        }
+
+        template <typename U>
+        auto operator=(weak_ptr<U> &&w) noexcept -> weak_ptr & {
+            weak_ptr(std::move(w)).swap(*this);
+            return *this;
+        }
+
         // modfier
       public:
         auto swap(weak_ptr &w) noexcept {
-            std::swap(w.m_ctlblk, m_ctlblk);
-            std::swap(w.m_mut, m_mut);
+            std::swap(w.m_ctlblk, m_ctlblk); // mutex 不需要且不能交换
         }
 
         auto reset() noexcept { weak_ptr().swap(*this); }
@@ -93,7 +159,7 @@ namespace mtl {
         auto expired() const noexcept -> bool { return use_count() == 0; }
 
         auto lock() const noexcept -> shared_ptr<T> {
-            auto lock = std::lock_guard<const std::mutex>{m_mut};
+            auto lock = std::lock_guard{m_mut};
             return expired() ? shared_ptr<T>() : shared_ptr<T>(*this);
         }
 
@@ -149,9 +215,12 @@ namespace mtl {
         }
 
         template <typename U>
-        shared_ptr(shared_ptr<U> &&s, element_type *p) noexcept : m_ptr(p), m_ctlblk(s.m_ctlblk) {
-            s.m_ptr = nullptr;
-            s.m_ctlblk = nullptr;
+        shared_ptr(shared_ptr<U> &&s, element_type *p) noexcept : m_ptr(p) {
+            if (m_ctlblk) {
+                m_ctlblk->dec_s();
+            }
+            m_ctlblk = s.m_ctlblk;
+            s.m_ptr = s.m_ctlblk = nullptr;
         }
 
         template <typename U>
@@ -168,14 +237,20 @@ namespace mtl {
         }
 
         template <typename U>
-        shared_ptr(shared_ptr<U> &&s) noexcept : m_ptr(s.m_ptr), m_ctlblk(s.m_ctlblk) {
-            s.m_ptr = nullptr;
-            s.m_ctlblk = nullptr;
+        shared_ptr(shared_ptr<U> &&s) noexcept : m_ptr(s.m_ptr) {
+            if (m_ctlblk) {
+                m_ctlblk->dec_s();
+            }
+            m_ctlblk = s.m_ctlblk;
+            s.m_ptr = s.m_ctlblk = nullptr;
         }
 
-        shared_ptr(shared_ptr &&s) noexcept : m_ptr(s.m_ptr), m_ctlblk(s.m_ctlblk) {
-            s.m_ptr = nullptr;
-            s.m_ctlblk = nullptr;
+        shared_ptr(shared_ptr &&s) noexcept : m_ptr(s.m_ptr) {
+            if (m_ctlblk) {
+                m_ctlblk->dec_s();
+            }
+            m_ctlblk = s.m_ctlblk;
+            s.m_ptr = s.m_ctlblk = nullptr;
         }
 
         template <typename U>

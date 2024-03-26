@@ -2,9 +2,9 @@
     一些通用工具，与标准无关
 */
 #pragma once
-#include <iostream>  // IWYU pragma: keep
-#include <cstdint>   // IWYU pragma: keep
-#include <numeric>   // IWYU pragma: keep
+#include <cstdint>  // IWYU pragma: keep
+#include <iostream> // IWYU pragma: keep
+#include <numeric>  // IWYU pragma: keep
 
 // 类型出现的次数
 namespace mtl {
@@ -18,14 +18,14 @@ namespace mtl {
         struct type_app_times<TD, T> {
             constexpr static size_t value = std::is_same_v<TD, T>;
         };
-    }  // namespace
+    } // namespace
 
     template <typename TD, typename... Types>
     constexpr static size_t type_app_times_v = type_app_times<TD, Types...>::value;
 
     template <typename TD, typename... Types>
     constexpr static bool type_app_unique = (type_app_times_v<TD, Types...> == 1);
-}  // namespace mtl
+} // namespace mtl
 
 // 获取第 N 个类型
 namespace mtl {
@@ -42,7 +42,7 @@ namespace mtl {
 
     template <size_t Idx, typename... Types>
     using nth_type_t = nth_type<Idx, Types...>::type;
-}  // namespace mtl
+} // namespace mtl
 
 // T 所处索引
 namespace mtl {
@@ -58,16 +58,31 @@ namespace mtl {
 
     template <typename TD, typename... Types>
     constexpr auto type_idx_v = type_idx<TD, 0, Types...>();
-}  // namespace mtl
+} // namespace mtl
 
 // 可隐式默认构造
 namespace mtl {
     template <typename T>
     concept is_implicitly_default_constructible = requires { std::add_const_t<std::add_lvalue_reference_t<T>>{}; };
-}  // namespace mtl
+} // namespace mtl
 
 // 完整类型
 namespace mtl {
     template <typename T>
     constexpr bool is_complete = (!std::is_void_v<T>)&&(sizeof(T));
 }
+
+// 类型是否是特化
+namespace mtl {
+    template <template <typename...> typename Temp, template <typename...> typename Spec, typename... Types>
+    constexpr auto is_specialization(Spec<Types...>) -> bool { return std::is_same_v<Temp<Types...>, Spec<Types...>>; }
+
+    template <typename Temp, typename Spec>
+    constexpr auto is_specialization(Spec) -> bool { return false; }
+
+    template <template <typename...> typename Temp, typename Spec>
+    constexpr auto is_specialization(Spec) -> bool { return false; }
+
+    template <typename Temp, template <typename...> typename Spec, typename... Types>
+    constexpr auto is_specialization(Spec<Types...>) -> bool { return false; }
+} // namespace mtl
