@@ -163,7 +163,187 @@ namespace mtl {
     }
 } // namespace mtl
 
-// mem_fn
-namespace mtl{
-    
-}
+// function
+namespace mtl {
+    class bad_function_call : public std::exception {};
+
+    template <typename R, typename... A>
+    class _function_storage {
+        using del_type = void (*)(void *);                                         // 删除器
+        using cop_type = void (*)(const _function_storage *, _function_storage *); // 拷贝器（拷贝自身给其他对象
+        using mov_type = void (*)(_function_storage *, _function_storage *);       // 移动器（移动自身给其他对象
+        using ivk_type = R (*)(const _function_storage *, A...);                   // 调用器
+
+      public:
+        template <typename F>
+            requires(!std::same_as<F, _function_storage>)
+        constexpr _function_storage(F f) {
+            if constexpr (sizeof(F) <= sizeof(void *)) {
+                std::construct_at(reinterpret_cast<F *>(stack_mem), std::forward<F>(f));
+                m_del = [](void *mem) { (*reinterpret_cast<F *>(mem)).~F(); };
+            } else {
+                heap_mem = new F(std::forward<F>(f));
+                m_del = [](void *mem) { delete reinterpret_cast<F *>(mem); };
+            }
+            m_cop = [](const _function_storage *_this, _function_storage *other) {
+                other->reset();
+                if constexpr (sizeof(F) <= sizeof(void *)) {
+                    std::construct_at(reinterpret_cast<F *>(other->stack_mem), *reinterpret_cast<F *>(const_cast<char *>(_this->stack_mem)));
+                } else {
+                    other->stack_mem = new F(*reinterpret_cast<F *>(_this->heap_mem));
+                }
+                other->m_cop = _this->m_cop;
+                other->m_mov = _this->m_mov;
+                other->m_del = _this->m_del;
+                other->m_ivk = _this->m_ivk;
+                other->t_info = _this->t_info;
+            };
+            m_mov = [](_function_storage *_this, _function_storage *other) {
+                other->reset();
+                other->heap_mem = _this->heap_mem;
+                other->m_cop = _this->m_cop;
+                other->m_mov = _this->m_mov;
+                other->m_del = _this->m_del;
+                other->m_ivk = _this->m_ivk;
+                other->t_info = _this->t_info;
+                _this->t_info = nullptr;
+            };
+            m_ivk = [](const _function_storage *_this, A... args) -> R {
+                if constexpr (sizeof(F) <= sizeof(void *)) {
+                    return invoke(*reinterpret_cast<F *>(const_cast<char *>(_this->stack_mem)), std::forward<A>(args)...);
+                } else {
+                    return invoke(reinterpret_cast<F *>(_this->heap_mem), std::forward<A>(args)...);
+                }
+            };
+            t_info = &typeid(f);
+        }
+
+        constexpr _function_storage(const _function_storage &fs) { fs.m_cop(&fs, this); }
+
+        constexpr _function_storage(_function_storage &&fs) { fs.m_mov(&fs, this); }
+
+        ~_function_storage() {
+            if (t_info != nullptr) {
+                m_del(stack_mem);
+            }
+        }
+
+      public:
+        auto reset() -> void {
+            if (t_info) {
+                m_del(stack_mem);
+                t_info = nullptr;
+            }
+        }
+
+        explicit operator bool() const noexcept { return t_info != nullptr; }
+
+        auto operator()(A... args) const -> R { return m_ivk(this, std::forward<A>(args)...); }
+
+      public:
+        union {
+            char stack_mem[sizeof(void *)];
+            void *heap_mem;
+        };
+        cop_type m_cop;
+        mov_type m_mov;
+        del_type m_del;
+        ivk_type m_ivk;
+        const std::type_info *t_info{nullptr};
+    };
+
+    template <typename R, typename... A>
+    class function<R(A...)> {
+      public:
+        using result_type = R;
+
+        // 构造
+      public:
+        function() noexcept = default;
+
+        function(std::nullptr_t) noexcept {}
+
+        function(const function &f) : m_storage(f.m_storage) {}
+
+        function(function &&f) noexcept : m_storage(std::move(f.m_storage)) {}
+
+        template <typename F>
+        function(F f) : m_storage(f) {}
+
+        ~function() = default;
+
+        // target access
+      public:
+        auto target_type() const noexcept -> const std::type_info & {
+            if (m_storage.t_info) {
+                return *m_storage.t_info;
+            }
+            return typeid(void);
+        }
+
+        template <typename T>
+        auto target() noexcept -> T * {
+            if constexpr (sizeof(T) <= sizeof(void *)) {
+                return target_type() == typeid(T) ? const_cast<char *>(m_storage.stack_mem) : nullptr;
+            } else {
+                return target_type() == typeid(T) ? m_storage.heap_mem : nullptr;
+            }
+        }
+
+        template <typename T>
+        auto target() const noexcept -> const T * {
+            if constexpr (sizeof(T) <= sizeof(void *)) {
+                return target_type() == typeid(T) ? const_cast<char *>(m_storage.stack_mem) : nullptr;
+            } else {
+                return target_type() == typeid(T) ? m_storage.heap_mem : nullptr;
+            }
+        }
+
+        //
+      public:
+        explicit operator bool() const noexcept { return static_cast<bool>(m_storage); }
+
+        auto operator()(A... args) const -> R {
+            if (!m_storage.t_info) {
+                throw bad_function_call();
+            }
+            return m_storage(std::forward<A>(args)...);
+        }
+
+      public:
+        _function_storage<R, A...> m_storage;
+    };
+
+    template <typename T>
+    struct _function_guide_helper;
+
+    template <typename R, typename G, typename... A, bool NX>
+    struct _function_guide_helper<R (G::*)(A...) noexcept(NX)> {
+        using type = R(A...);
+    };
+
+    template <typename R, typename G, typename... A, bool NX>
+    struct _function_guide_helper<R (G::*)(A...) & noexcept(NX)> {
+        using type = R(A...);
+    };
+
+    template <typename R, typename G, typename... A, bool NX>
+    struct _function_guide_helper<R (G::*)(A...) const noexcept(NX)> {
+        using type = R(A...);
+    };
+
+    template <typename R, typename G, typename... A, bool NX>
+    struct _function_guide_helper<R (G::*)(A...) const & noexcept(NX)> {
+        using type = R(A...);
+    };
+
+    template <typename T>
+    using _function_guide_helper_t = _function_guide_helper<T>::type;
+
+    template <typename R, typename... Args>
+    function(R (*)(Args...)) -> function<R(Args...)>;
+
+    template <typename F>
+    function(F) -> function<_function_guide_helper_t<decltype(&F::operator())>>;
+
+} // namespace mtl

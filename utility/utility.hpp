@@ -86,6 +86,9 @@ namespace mtl {
 
     template <typename T>
     class weak_ptr;
+
+    template <typename F>
+    class function;
 } // namespace mtl
 
 // tuple size
