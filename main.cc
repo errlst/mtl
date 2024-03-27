@@ -5,4 +5,15 @@
 #include <functional>
 #include <iostream>
 
-auto main() -> int { return 0; }
+struct T {
+  T() { std::cout << "con\n"; }
+  T(const T &) { std::cout << "copy\n"; }
+  T(T &&) { std::cout << "move\n"; }
+};
+
+auto main() -> int {
+
+  mtl::bind_front([](int i) {std::cout << i;})(0);
+
+  return 0;
+}
