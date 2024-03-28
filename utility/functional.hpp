@@ -196,7 +196,7 @@ namespace mtl {
                 other->m_mov = _this->m_mov;
                 other->m_del = _this->m_del;
                 other->m_ivk = _this->m_ivk;
-                other->t_info = _this->t_info;
+                other->m_tinfo = _this->m_tinfo;
             };
             m_mov = [](_function_storage *_this, _function_storage *other) {
                 other->reset();
@@ -205,8 +205,8 @@ namespace mtl {
                 other->m_mov = _this->m_mov;
                 other->m_del = _this->m_del;
                 other->m_ivk = _this->m_ivk;
-                other->t_info = _this->t_info;
-                _this->t_info = nullptr;
+                other->m_tinfo = _this->m_tinfo;
+                _this->m_tinfo = nullptr;
             };
             m_ivk = [](const _function_storage *_this, A... args) -> R {
                 if constexpr (sizeof(F) <= sizeof(void *)) {
@@ -215,7 +215,7 @@ namespace mtl {
                     return invoke(reinterpret_cast<F *>(_this->heap_mem), std::forward<A>(args)...);
                 }
             };
-            t_info = &typeid(f);
+            m_tinfo = &typeid(f);
         }
 
         constexpr _function_storage(const _function_storage &fs) { fs.m_cop(&fs, this); }
@@ -223,22 +223,30 @@ namespace mtl {
         constexpr _function_storage(_function_storage &&fs) { fs.m_mov(&fs, this); }
 
         ~_function_storage() {
-            if (t_info != nullptr) {
+            if (m_tinfo != nullptr) {
                 m_del(stack_mem);
             }
         }
 
       public:
         auto reset() -> void {
-            if (t_info) {
+            if (m_tinfo) {
                 m_del(stack_mem);
-                t_info = nullptr;
+                m_tinfo = nullptr;
             }
         }
 
-        explicit operator bool() const noexcept { return t_info != nullptr; }
+        explicit operator bool() const noexcept { return m_tinfo != nullptr; }
 
         auto operator()(A... args) const -> R { return m_ivk(this, std::forward<A>(args)...); }
+
+        auto swap(_function_storage &other) -> void {
+            std::swap(m_cop, other.m_cop);
+            std::swap(m_mov, other.m_mov);
+            std::swap(m_del, other.m_del);
+            std::swap(m_ivk, other.m_ivk);
+            std::swap(m_tinfo, other.m_tinfo);
+        }
 
       public:
         union {
@@ -249,7 +257,7 @@ namespace mtl {
         mov_type m_mov;
         del_type m_del;
         ivk_type m_ivk;
-        const std::type_info *t_info{nullptr};
+        const std::type_info *m_tinfo{nullptr};
     };
 
     template <typename R, typename... A>
@@ -268,15 +276,30 @@ namespace mtl {
         function(function &&f) noexcept : m_storage(std::move(f.m_storage)) {}
 
         template <typename F>
+            requires(std::same_as<R, std::invoke_result_t<F, A...>>)
         function(F f) : m_storage(f) {}
 
         ~function() = default;
 
+        // assign
+      public:
+        template <typename F>
+            requires(std::same_as<R, std::invoke_result_t<std::decay_t<F>, A...>>)
+        auto operator=(F &&f) -> function & {
+            function(std::forward<F>(f)).swap(*this);
+            return *this;
+        }
+
+        auto operator=(std::nullptr_t) noexcept -> function & {
+            m_storage.reset();
+            return *this;
+        }
+
         // target access
       public:
         auto target_type() const noexcept -> const std::type_info & {
-            if (m_storage.t_info) {
-                return *m_storage.t_info;
+            if (m_storage.m_tinfo) {
+                return *m_storage.m_tinfo;
             }
             return typeid(void);
         }
@@ -304,16 +327,19 @@ namespace mtl {
         explicit operator bool() const noexcept { return static_cast<bool>(m_storage); }
 
         auto operator()(A... args) const -> R {
-            if (!m_storage.t_info) {
-                throw bad_function_call();
+            if (*this) {
+                return m_storage(std::forward<A>(args)...);
             }
-            return m_storage(std::forward<A>(args)...);
+            throw bad_function_call();
         }
+
+        auto swap(function &other) noexcept -> void { m_storage.swap(other.m_storage); }
 
       public:
         _function_storage<R, A...> m_storage;
     };
 
+    // 推导指南
     template <typename T>
     struct _function_guide_helper;
 
@@ -346,4 +372,10 @@ namespace mtl {
     template <typename F>
     function(F) -> function<_function_guide_helper_t<decltype(&F::operator())>>;
 
+    // 全局函数
+    template <typename R, typename... Args>
+    auto operator==(const function<R(Args...)> &lhs, std::nullptr_t) -> bool { return !lhs; }
+
+    template <typename R, typename... Args>
+    auto swap(function<R(Args...)> &lhs, function<R(Args...)> &rhs) -> void { lhs.swap(rhs); }
 } // namespace mtl
