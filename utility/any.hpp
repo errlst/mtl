@@ -11,11 +11,11 @@ namespace mtl {
 
     template <typename T>
         requires(!std::is_void_v<T>)
-    constexpr auto any_cast(any *ap) noexcept -> T *;
+    constexpr auto any_cast(any *ap) -> T *;
 
     template <typename T>
         requires(!std::is_void_v<T>)
-    constexpr auto any_cast(const any *ap) noexcept -> const T *;
+    constexpr auto any_cast(const any *ap) -> const T *;
 
     template <typename T, typename U = std::remove_cvref_t<T>>
         requires(std::is_constructible_v<T, const U &>)
@@ -32,7 +32,6 @@ namespace mtl {
 
 // any
 namespace mtl {
-
     class any {
       public:
         constexpr any() noexcept = default;
@@ -255,20 +254,20 @@ namespace mtl {
 namespace mtl {
     template <typename T>
         requires(!std::is_void_v<T>)
-    constexpr auto any_cast(any *ap) noexcept -> T * {
+    constexpr auto any_cast(any *ap) -> T * {
         if (ap->type() != typeid(T)) {
             throw bad_any_cast{};
         } else if (ap != nullptr) {
             auto arg = any::_any_manager_manage_arg{.op = any::_any_manager_op::access, .dst_any = ap};
             ap->m_manage(arg);
-            return arg.obj;
+            return reinterpret_cast<T *>(arg.obj);
         }
         return nullptr;
     }
 
     template <typename T>
         requires(!std::is_void_v<T>)
-    constexpr auto any_cast(const any *ap) noexcept -> const T * {
+    constexpr auto any_cast(const any *ap) -> const T * {
         return const_cast<const T *>(any_cast<T>(const_cast<any *>(ap)));
     }
 } // namespace mtl
