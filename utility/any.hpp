@@ -1,5 +1,4 @@
 /*
-    https://timsong-cpp.github.io/cppwp/n4861/any
     https://github.com/gcc-mirror/gcc/blob/master/libstdc%2B%2B-v3/include/std/any 借助类型擦除对存储的对象和类型进行管理
 */
 #pragma once
@@ -32,6 +31,9 @@ namespace mtl {
 
 // any
 namespace mtl {
+    // 小类型对象，直接存放在栈内存中；大类型对象，存放在堆内存中。
+    // 表达式 stack_mem 为小对象的地址，表达式 heap_mem 为大对象的地址。
+    // 借助 manager::manage 对保存对象进行拷贝、移动、析构等操作，实现类型擦除。
     class any {
       public:
         constexpr any() noexcept = default;
@@ -39,22 +41,23 @@ namespace mtl {
         constexpr any(const any &a) {
             if (a.has_value()) {
                 auto arg = _any_manager_manage_arg{
-                    .op = _any_manager_op::copy_assign,
-                    .src_any = &a,
-                    .dst_any = this};
+                    .op = _any_manager_op::copy,
+                    .src = &a,
+                    .dst = this};
                 a.m_manage(arg);
                 m_manage = a.m_manage;
             }
         }
 
         constexpr any(any &&a) {
-            if (a.has_value()) {
+            if (this != &a && a.has_value()) {
                 auto arg = _any_manager_manage_arg{
-                    .op = _any_manager_op::move_assign,
-                    .src_any = &a,
-                    .dst_any = this};
+                    .op = _any_manager_op::move,
+                    .src = &a,
+                    .dst = this};
                 a.m_manage(arg);
                 m_manage = a.m_manage;
+                a.m_manage = nullptr;
             }
         }
 
@@ -114,14 +117,14 @@ namespace mtl {
 
         constexpr auto reset() noexcept -> void {
             if (has_value()) {
-                auto arg = _any_manager_manage_arg{.op = _any_manager_op::destruct, .dst_any = this};
+                auto arg = _any_manager_manage_arg{.op = _any_manager_op::destruct, .dst = this};
                 m_manage(arg);
             }
         }
 
         constexpr auto swap(any &a) noexcept -> void {
             std::swap(m_manage, a.m_manage);
-            std::swap(m_dbuf, a.m_dbuf); // dbuf 和 cache 共用一块内存，交换一次即可
+            std::swap(m_heap_mem, a.m_heap_mem); // heap_mem 和 stack_mem 占用一块内存，交换一次即可
         }
 
         // state
@@ -130,121 +133,120 @@ namespace mtl {
 
         constexpr auto type() const -> const std::type_info & {
             if (has_value()) {
-                auto arg = _any_manager_manage_arg{.op = _any_manager_op::get_typeinfo};
+                auto arg = _any_manager_manage_arg{.op = _any_manager_op::typeinfo};
                 m_manage(arg);
-                return *arg.t_info;
+                return *arg.tp;
             }
             return typeid(void);
         }
 
-        // managers
+        // manager
       public:
         enum class _any_manager_op {
-            access,
-            get_typeinfo,
-            copy_assign,
-            move_assign,
-            destruct
+            access,   // 获取地址
+            typeinfo, // 获取类型
+            copy,     // 拷贝
+            move,     // 移动
+            destruct  // 销毁
         };
 
         struct _any_manager_manage_arg {
-            _any_manager_op op;           // input
-            const any *src_any;           // input
-            any *dst_any;                 // input
-            const std::type_info *t_info; // output
-            void *obj;                    // output, 接收 m_cache 或 m_dbuf
+            _any_manager_op op;       // 输入参数
+            const any *src;           // 输入参数
+            any *dst;                 // 输入参数
+            const std::type_info *tp; // 输出参数
+            void *mem;                // 输出参数, 保存 stack_mem 或 heap_mem
         };
 
         using _any_manager_manage_t = void (*)(_any_manager_manage_arg &);
 
+        // 栈内存管理器
         template <typename T>
-        struct _any_manager_internal { // 管理缓存
+        struct _any_stack_mem_manager {
             constexpr static auto manage(_any_manager_manage_arg &arg) -> void {
                 using enum _any_manager_op;
                 switch (arg.op) {
-                case access:
-                    arg.obj = arg.dst_any->m_cache;
-                    break;
-                case get_typeinfo:
-                    arg.t_info = &typeid(T);
-                    break;
-                case copy_assign:
-                    destroy(arg);
-                    arg.dst_any->m_manage = arg.src_any->m_manage;
-                    std::construct_at(reinterpret_cast<T *>(arg.dst_any->m_cache), *reinterpret_cast<const T *>(arg.src_any->m_cache));
-                    break;
-                case move_assign:
-                    destroy(arg);
-                    arg.dst_any->m_manage = arg.src_any->m_manage;
-                    std::construct_at(reinterpret_cast<T *>(arg.dst_any->m_cache), std::move(*reinterpret_cast<const T *>(arg.src_any->m_cache)));
-                    break;
-                case destruct:
-                    destroy(arg);
-                    break;
+                    case access:
+                        arg.mem = arg.dst->m_stack_mem;
+                        break;
+                    case typeinfo:
+                        arg.tp = &typeid(T);
+                        break;
+                    case copy:
+                        destroy(arg);
+                        construct(*arg.dst, *reinterpret_cast<const T *>(arg.src->m_stack_mem));
+                        arg.dst->m_manage = arg.src->m_manage;
+                        break;
+                    case move:
+                        destroy(arg);
+                        construct(*arg.dst, std::move(*reinterpret_cast<const T *>(arg.src->m_stack_mem)));
+                        arg.dst->m_manage = arg.src->m_manage;
+                        break;
+                    case destruct:
+                        destroy(arg);
+                        break;
                 }
             }
 
             template <typename... Args>
-            constexpr static auto construct(any &a, Args &&...args) {
-                std::construct_at(reinterpret_cast<T *>(a.m_cache), std::forward<Args>(args)...);
-            }
+            constexpr static auto construct(any &a, Args &&...args) { std::construct_at(reinterpret_cast<T *>(a.m_stack_mem), std::forward<Args>(args)...); }
 
             constexpr static auto destroy(_any_manager_manage_arg &arg) {
-                if (arg.dst_any->has_value()) {
-                    arg.dst_any->m_manage = nullptr;
-                    std::destroy_at(reinterpret_cast<T *>(arg.dst_any->m_cache));
+                if (arg.dst->has_value()) {
+                    std::destroy_at(reinterpret_cast<T *>(arg.dst->m_stack_mem));
+                    arg.dst->m_manage = nullptr;
                 }
             }
         };
 
+        // 堆内存管理器
         template <typename T>
-        struct _any_manager_external { // 管理动态内存
+        struct _any_heap_mem_manager {
             constexpr static auto manage(_any_manager_manage_arg &arg) -> void {
                 using enum _any_manager_op;
                 switch (arg.op) {
-                case access:
-                    arg.obj = arg.dst_any->m_dbuf;
-                    break;
-                case get_typeinfo:
-                    arg.t_info = &typeid(T);
-                    break;
-                case copy_assign:
-                    destroy(arg);
-                    arg.dst_any->m_manage = arg.src_any->m_manage;
-                    arg.dst_any->m_dbuf = new T(*reinterpret_cast<T *>(arg.src_any->m_dbuf));
-                    break;
-                case move_assign:
-                    destroy(arg);
-                    arg.dst_any->m_manage = arg.src_any->m_manage;
-                    arg.dst_any->m_dbuf = new T(std::move(*reinterpret_cast<T *>(arg.src_any->m_dbuf)));
-                    break;
-                case destruct:
-                    destroy(arg);
-                    break;
+                    case access:
+                        arg.mem = arg.dst->m_heap_mem;
+                        break;
+                    case typeinfo:
+                        arg.tp = &typeid(T);
+                        break;
+                    case copy:
+                        destroy(arg);
+                        construct(*arg.dst, *reinterpret_cast<T *>(arg.src->m_heap_mem));
+                        arg.dst->m_manage = arg.src->m_manage;
+                        break;
+                    case move:
+                        destroy(arg);
+                        construct(*arg.dst, std::move(*reinterpret_cast<T *>(arg.src->m_heap_mem)));
+                        arg.dst->m_manage = arg.src->m_manage;
+                        break;
+                    case destruct:
+                        destroy(arg);
+                        break;
                 }
             }
 
             template <typename... Args>
-            constexpr static auto construct(any &a, Args &&...args) {
-                a.m_dbuf = new T(std::forward<Args>(args)...);
-            }
+            constexpr static auto construct(any &a, Args &&...args) { a.m_heap_mem = new T(std::forward<Args>(args)...); }
 
             constexpr static auto destroy(_any_manager_manage_arg &arg) {
-                if (arg.dst_any->has_value()) {
-                    arg.dst_any->m_manage = nullptr;
-                    delete reinterpret_cast<T *>(arg.dst_any->m_dbuf);
+                if (arg.dst->has_value()) {
+                    arg.dst->m_manage = nullptr;
+                    delete reinterpret_cast<T *>(arg.dst->m_heap_mem);
                 }
             }
         };
 
+        // any 的默认构造函数是不会抛出异常的，因此如果 T 的默认构造函数可能抛出异常，那么其只能存放在堆中。这样 any 默认构造时，不会立即初始化，也就不会抛出异常。
         template <typename T>
         using _any_manager_t = std::conditional_t<sizeof(T) <= sizeof(void *) && std::is_nothrow_constructible_v<T>,
-                                                  _any_manager_internal<T>, _any_manager_external<T>>;
+                                                  _any_stack_mem_manager<T>, _any_heap_mem_manager<T>>;
 
       public:
         union {
-            char m_cache[sizeof(void *)]; // 缓存
-            void *m_dbuf;                 // 动态内存
+            char m_stack_mem[sizeof(void *)];
+            void *m_heap_mem;
         };
         _any_manager_manage_t m_manage;
     };
@@ -255,14 +257,12 @@ namespace mtl {
     template <typename T>
         requires(!std::is_void_v<T>)
     constexpr auto any_cast(any *ap) -> T * {
-        if (ap->type() != typeid(T)) {
+        if (ap == nullptr || ap->type() != typeid(T) || !ap->has_value()) {
             throw bad_any_cast{};
-        } else if (ap != nullptr) {
-            auto arg = any::_any_manager_manage_arg{.op = any::_any_manager_op::access, .dst_any = ap};
-            ap->m_manage(arg);
-            return reinterpret_cast<T *>(arg.obj);
         }
-        return nullptr;
+        auto arg = any::_any_manager_manage_arg{.op = any::_any_manager_op::access, .dst = ap};
+        ap->m_manage(arg);
+        return reinterpret_cast<T *>(arg.mem);
     }
 
     template <typename T>
