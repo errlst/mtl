@@ -60,9 +60,9 @@ namespace mtl {
             for (auto i = 0; i < _bitset_floor_byte_count(bit_count); ++i) {
                 *(byte_ptr--) = *(val_ptr++);
             }
-            //  零散比特
-            --byte_ptr;
-            for (auto i = 0, mask = 0b11111111; i < _bitset_scattered_bit_count(bit_count); ++i) {
+            //  零覆盖最后一个有效字节中的无效比特
+            ++byte_ptr;
+            for (auto i = 0, mask = 0b11111111; i < BITS_PER_BYTE - _bitset_scattered_bit_count(bit_count); ++i) {
                 mask >>= 1;
                 *byte_ptr &= mask;
             }
@@ -98,28 +98,28 @@ namespace mtl {
         // binary operator
       public:
         auto operator&=(const bitset &other) noexcept -> bitset & {
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < m_bytes_size; ++i) {
                 m_bytes[i] &= other.m_bytes[i];
             }
             return *this;
         }
 
         auto operator|=(const bitset &other) noexcept -> bitset & {
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < m_bytes_size; ++i) {
                 m_bytes[i] |= other.m_bytes[i];
             }
             return *this;
         }
 
         auto operator^=(const bitset &other) noexcept -> bitset & {
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < m_bytes_size; ++i) {
                 m_bytes[i] ^= other.m_bytes[i];
             }
         }
 
         auto operator~() const noexcept -> bitset {
             auto res = bitset{};
-            for (auto i = 0; i < _bitset_floor_byte_count(N); ++i) {
+            for (auto i = 0; i < m_bytes_size; ++i) {
                 res.m_bytes[i] = ~m_bytes[i];
             }
             // bytes[0] 的无效比特位需要置零
