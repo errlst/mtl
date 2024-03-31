@@ -356,25 +356,16 @@ namespace mtl {
     template <typename T>
     struct _function_guide_helper;
 
-    template <typename Ret, typename Class, typename... Args, bool NX>
-    struct _function_guide_helper<Ret (Class::*)(Args...) noexcept(NX)> {
-        using type = Ret(Args...);
+#define _FUNCTION_GUIDE_HELPER(_QUAL)                                           \
+    template <typename Ret, typename Class, typename... Args, bool NX>          \
+    struct _function_guide_helper<Ret (Class::*)(Args...) _QUAL noexcept(NX)> { \
+        using type = Ret(Args...);                                              \
     };
-
-    template <typename Ret, typename Class, typename... Args, bool NX>
-    struct _function_guide_helper<Ret (Class::*)(Args...) & noexcept(NX)> {
-        using type = Ret(Args...);
-    };
-
-    template <typename Ret, typename Class, typename... Args, bool NX>
-    struct _function_guide_helper<Ret (Class::*)(Args...) const noexcept(NX)> {
-        using type = Ret(Args...);
-    };
-
-    template <typename Ret, typename Class, typename... Args, bool NX>
-    struct _function_guide_helper<Ret (Class::*)(Args...) const & noexcept(NX)> {
-        using type = Ret(Args...);
-    };
+    _FUNCTION_GUIDE_HELPER()
+    _FUNCTION_GUIDE_HELPER(&)
+    _FUNCTION_GUIDE_HELPER(const)
+    _FUNCTION_GUIDE_HELPER(const &)
+#undef _FUNCTION_GUIDE_HELPER
 
     template <typename T>
     using _function_guide_helper_t = _function_guide_helper<T>::type;
@@ -387,8 +378,12 @@ namespace mtl {
 
     // 全局函数
     template <typename R, typename... Args>
-    auto operator==(const function<R(Args...)> &lhs, std::nullptr_t) -> bool { return !lhs; }
+    auto operator==(const function<R(Args...)> &lhs, std::nullptr_t) -> bool {
+        return !lhs;
+    }
 
     template <typename R, typename... Args>
-    auto swap(function<R(Args...)> &lhs, function<R(Args...)> &rhs) -> void { lhs.swap(rhs); }
+    auto swap(function<R(Args...)> &lhs, function<R(Args...)> &rhs) -> void {
+        lhs.swap(rhs);
+    }
 } // namespace mtl
