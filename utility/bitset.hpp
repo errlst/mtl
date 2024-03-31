@@ -115,6 +115,7 @@ namespace mtl {
             for (auto i = 0; i < m_bytes_size; ++i) {
                 m_bytes[i] ^= other.m_bytes[i];
             }
+            return *this;
         }
 
         auto operator~() const noexcept -> bitset {
@@ -150,6 +151,12 @@ namespace mtl {
         //  如果直接使用 m_bytes 接受 word 移位后的结果，会导致后续的移位操作的操作数是移位后的结果，因此需要将结果暂存到临时量上，并在移位完成后拷贝
       public:
         auto operator<<=(size_t pos) -> bitset & {
+            // 只有一个字节的情况，特殊处理
+            if (m_bytes_size == 1) {
+                m_bytes[0] <<= pos;
+                return *this;
+            }
+            //  递归处理，每次最多移动8位
             if (pos > BITS_PER_BYTE) {
                 (*this) <<= (pos - BITS_PER_BYTE);
                 pos = BITS_PER_BYTE;
@@ -182,24 +189,28 @@ namespace mtl {
         }
 
         auto operator>>=(size_t pos) -> bitset & {
+            if (m_bytes_size == 1) {
+                m_bytes[0] >>= pos;
+                return *this;
+            }
             if (pos > BITS_PER_BYTE) {
                 (*this) >>= (pos - BITS_PER_BYTE);
-                pos = 8;
+                pos = BITS_PER_BYTE;
             }
-            uint8_t bytes[m_bytes_size]{0};
-            auto byte = bytes;
-            auto m_byte = m_bytes;
+            uint8_t bytes_tmp[m_bytes_size]{0};
+            auto byte_tmp = &bytes_tmp[0];
+            auto m_byte = &m_bytes[0];
             auto word = uint16_t{0};
-            auto word_r = reinterpret_cast<uint16_t *>(&word), word_l = word_r + 1;
-            for (auto i = 0; i < m_bytes_size; ++i) {
-                *word_l = *m_byte;
-                *word_r = *(++m_byte);
+            auto word_l = reinterpret_cast<uint8_t *>(&word), word_h = word_l + 1;
+            for (auto i = 0; i < m_bytes_size - 1; ++i) {
+                *word_h = *m_byte;
+                *word_l = *(++m_byte);
                 word >>= pos;
-                *(byte) |= *word_l;
-                *(++byte) |= *word_r;
+                *(byte_tmp) |= *word_h;
+                *(++byte_tmp) |= *word_l;
             }
             for (auto i = 0; i < m_bytes_size; ++i) {
-                m_bytes[i] = bytes[i];
+                m_bytes[i] = bytes_tmp[i];
             }
             return *this;
         }
@@ -281,7 +292,10 @@ namespace mtl {
             return *this;
         }
 
-        auto reset(size_t pos) { set(pos, false); }
+        auto reset(size_t pos) -> bitset & {
+            set(pos, false);
+            return *this;
+        }
 
         auto flip() noexcept -> bitset & {
             for (auto i = 0; i < m_bytes_size; ++i) {

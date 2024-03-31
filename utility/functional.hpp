@@ -2,28 +2,28 @@
 #include "tuple.hpp"
 #include "utility.hpp"
 
-// invoke
+//  invoke
 namespace mtl {
-    // f 是 T 的成员函数指针
+    //  f 是 T 的成员函数指针
+    //  传入的 t 可以是引用、reference_wrap、指针
+    //  只能使用 std::reference_wrap，因为没有实现 mtl::remove_reference_t
     template <typename Ret, typename Class, typename... Args, typename T>
-    constexpr auto _invoke_impl(Ret (Class::*f)(Args...), T &&t, Args &&...args) -> decltype(auto)
-        requires(std::is_same_v<Class, std::remove_pointer_t<T>>)
-    {
-        if constexpr (std::is_base_of_v<T, std::remove_reference_t<decltype(t)>>) {
+    constexpr auto _invoke_impl(Ret (Class::*f)(Args...), T &&t, Args &&...args) -> decltype(auto) {
+        if constexpr (std::is_base_of_v<Class, std::remove_reference_t<decltype(t)>>) {
             return (t.*f)(std::forward<Args>(args)...);
-        } else if constexpr (is_specialization<std::reference_wrapper>(std::remove_reference_t<decltype(t)>())) {
+        } else if constexpr (std::is_same_v<std::true_type, decltype(is_specialization<std::reference_wrapper>(std::declval<T>()))>) {
             return (t.get().*f)(std::forward<Args>(args)...);
         } else {
             return ((*t).*f)(std::forward<Args>(args)...);
         }
     }
 
-    // f 是 T 的数据成员指针
+    //  f 是 T 的数据成员指针
     template <typename Type, typename Class, typename T>
     constexpr auto _invoke_impl(Type(Class::*f), T &&t) -> decltype(auto) {
-        if constexpr (std::is_base_of_v<T, std::remove_reference_t<decltype(t)>>) {
+        if constexpr (std::is_base_of_v<Class, std::remove_reference_t<decltype(t)>>) {
             return t.*f;
-        } else if constexpr (is_specialization<std::reference_wrapper>(std::remove_reference_t<decltype(t)>())) {
+        } else if constexpr (std::is_same_v<std::true_type, decltype(is_specialization<std::reference_wrapper>(std::declval<T>()))>) {
             return t.get().*f;
         } else {
             return (*t).*f;
@@ -35,7 +35,7 @@ namespace mtl {
         if constexpr (requires { _invoke_impl(std::forward<F>(f), std::forward<T>(t), std::forward<Args>(args)...); }) {
             return _invoke_impl(std::forward<F>(f), std::forward<T>(t), std::forward<Args>(args)...);
         } else {
-            return f(std::forward<T>(t), std::forward<Args>...);
+            return f(std::forward<T>(t), std::forward<Args>(args)...);
         }
     }
 
@@ -77,9 +77,7 @@ namespace mtl {
         // invoke
       public:
         template <typename... Args>
-        constexpr auto operator()(Args &&...args) -> std::invoke_result_t<T &, Args...> {
-            return invoke(get(), std::forward<Args>(args)...);
-        }
+        constexpr auto operator()(Args &&...args) -> std::invoke_result_t<T &, Args...> { return invoke(get(), std::forward<Args>(args)...); }
 
       public:
         T *m_ptr;
@@ -87,6 +85,20 @@ namespace mtl {
 
     template <typename T>
     reference_wrapper(T &) -> reference_wrapper<T>;
+
+    //  ref
+    template <typename T>
+    constexpr auto ref(T &t) noexcept -> reference_wrapper<T> { return {t}; }
+
+    template <typename T>
+    constexpr auto ref(reference_wrapper<T> r) noexcept -> reference_wrapper<T> { return ref(r.get()); }
+
+    template <typename T>
+    constexpr auto cref(const T &t) noexcept -> reference_wrapper<const T> { return {t}; }
+
+    template <typename T>
+    constexpr auto cref(reference_wrapper<T> r) noexcept -> reference_wrapper<const T> { return cref(r.get()); }
+
 } // namespace mtl
 
 // not_fn
@@ -135,12 +147,12 @@ namespace mtl {
         }
 
       public:
-#define _BIND_FRONT_RET_OP_INVOKE(_QUAL)                                                                                                       \
-    template <typename... CallArgs>                                                                                                            \
-    auto operator()(CallArgs &&...c_args) _QUAL->std::invoke_result_t<FD _QUAL, BoundArgs _QUAL..., CallArgs...> {                             \
-        return [&, this]<size_t... Idx>(index_sequence<Idx...>) {                                                                              \
-            invoke(std::forward<FD _QUAL>(m_f), get<Idx>(std::forward<decltype(m_args) _QUAL>(m_args))..., std::forward<CallArgs>(c_args)...); \
-        }(make_index_sequence<sizeof...(BoundArgs)>());                                                                                        \
+#define _BIND_FRONT_RET_OP_INVOKE(_QUAL)                                                                                                              \
+    template <typename... CallArgs>                                                                                                                   \
+    auto operator()(CallArgs &&...c_args) _QUAL->std::invoke_result_t<FD _QUAL, BoundArgs _QUAL..., CallArgs...> {                                    \
+        return [&, this]<size_t... Idx>(index_sequence<Idx...>) {                                                                                     \
+            return invoke(std::forward<FD _QUAL>(m_f), get<Idx>(std::forward<decltype(m_args) _QUAL>(m_args))..., std::forward<CallArgs>(c_args)...); \
+        }(make_index_sequence<sizeof...(BoundArgs)>());                                                                                               \
     }
         _BIND_FRONT_RET_OP_INVOKE(&);
         _BIND_FRONT_RET_OP_INVOKE(const &);
@@ -158,21 +170,22 @@ namespace mtl {
                  std::is_move_constructible_v<std::decay_t<F>> &&
                  (std::is_constructible_v<std::decay_t<Args>, Args> && ...) &&
                  (std::is_move_constructible_v<std::decay_t<Args>> && ...))
-    constexpr auto bind_front(F &&f, Args &&...args) -> decltype(auto) {
+    constexpr auto bind_front(F &&f, Args &&...args) -> _bind_front_ret<std::decay_t<F>, std::decay_t<Args>...> {
         return _bind_front_ret<std::decay_t<F>, std::decay_t<Args>...>{std::forward<F>(f), std::forward<Args>(args)...};
     }
 } // namespace mtl
 
-// function
+//  function 类似 any，小对象直接存放在栈内存，大对象存放在堆内存。
+//  function 的实现借助 lambda，对删除、拷贝、移动、调用操作进行类型擦除。
 namespace mtl {
     class bad_function_call : public std::exception {};
 
-    template <typename R, typename... A>
+    template <typename Ret, typename... Args>
     class _function_storage {
-        using del_type = void (*)(void *);                                         // 删除器
+        using del_type = void (*)(void *);                                         // 删除器，传入 stack_mem
         using cop_type = void (*)(const _function_storage *, _function_storage *); // 拷贝器（拷贝自身给其他对象
         using mov_type = void (*)(_function_storage *, _function_storage *);       // 移动器（移动自身给其他对象
-        using ivk_type = R (*)(const _function_storage *, A...);                   // 调用器
+        using ivk_type = Ret (*)(const _function_storage *, Args...);              // 调用器
 
       public:
         template <typename F>
@@ -183,36 +196,36 @@ namespace mtl {
                 m_del = [](void *mem) { (*reinterpret_cast<F *>(mem)).~F(); };
             } else {
                 heap_mem = new F(std::forward<F>(f));
-                m_del = [](void *mem) { delete reinterpret_cast<F *>(mem); };
+                m_del = [](void *mem) { delete reinterpret_cast<F *>((*reinterpret_cast<std::ptrdiff_t *>(mem))); }; // 通过 stack_mem 获取 heap_mem 的值
             }
-            m_cop = [](const _function_storage *_this, _function_storage *other) {
-                other->reset();
+            m_cop = [](const _function_storage *src, _function_storage *dst) {
+                dst->reset();
                 if constexpr (sizeof(F) <= sizeof(void *)) {
-                    std::construct_at(reinterpret_cast<F *>(other->stack_mem), *reinterpret_cast<F *>(const_cast<char *>(_this->stack_mem)));
+                    std::construct_at(reinterpret_cast<F *>(dst->stack_mem), *reinterpret_cast<F *>(const_cast<char *>(src->stack_mem)));
                 } else {
-                    other->stack_mem = new F(*reinterpret_cast<F *>(_this->heap_mem));
+                    dst->heap_mem = new F(*reinterpret_cast<F *>(src->heap_mem));
                 }
-                other->m_cop = _this->m_cop;
-                other->m_mov = _this->m_mov;
-                other->m_del = _this->m_del;
-                other->m_ivk = _this->m_ivk;
-                other->m_tinfo = _this->m_tinfo;
+                dst->m_cop = src->m_cop;
+                dst->m_mov = src->m_mov;
+                dst->m_del = src->m_del;
+                dst->m_ivk = src->m_ivk;
+                dst->m_tinfo = src->m_tinfo;
             };
-            m_mov = [](_function_storage *_this, _function_storage *other) {
-                other->reset();
-                other->heap_mem = _this->heap_mem;
-                other->m_cop = _this->m_cop;
-                other->m_mov = _this->m_mov;
-                other->m_del = _this->m_del;
-                other->m_ivk = _this->m_ivk;
-                other->m_tinfo = _this->m_tinfo;
-                _this->m_tinfo = nullptr;
+            m_mov = [](_function_storage *src, _function_storage *dst) {
+                dst->reset();
+                dst->heap_mem = src->heap_mem;
+                dst->m_cop = src->m_cop;
+                dst->m_mov = src->m_mov;
+                dst->m_del = src->m_del;
+                dst->m_ivk = src->m_ivk;
+                dst->m_tinfo = src->m_tinfo;
+                src->m_tinfo = nullptr;
             };
-            m_ivk = [](const _function_storage *_this, A... args) -> R {
+            m_ivk = [](const _function_storage *_this, Args... args) -> Ret {
                 if constexpr (sizeof(F) <= sizeof(void *)) {
-                    return invoke(*reinterpret_cast<F *>(const_cast<char *>(_this->stack_mem)), std::forward<A>(args)...);
+                    return invoke(*reinterpret_cast<F *>(const_cast<char *>(_this->stack_mem)), std::forward<Args>(args)...);
                 } else {
-                    return invoke(reinterpret_cast<F *>(_this->heap_mem), std::forward<A>(args)...);
+                    return invoke(*reinterpret_cast<F *>(_this->heap_mem), std::forward<Args>(args)...);
                 }
             };
             m_tinfo = &typeid(f);
@@ -238,7 +251,7 @@ namespace mtl {
 
         explicit operator bool() const noexcept { return m_tinfo != nullptr; }
 
-        auto operator()(A... args) const -> R { return m_ivk(this, std::forward<A>(args)...); }
+        auto operator()(Args... args) const -> Ret { return m_ivk(this, std::forward<Args>(args)...); }
 
         auto swap(_function_storage &other) -> void {
             std::swap(m_cop, other.m_cop);
@@ -260,10 +273,10 @@ namespace mtl {
         const std::type_info *m_tinfo{nullptr};
     };
 
-    template <typename R, typename... A>
-    class function<R(A...)> {
+    template <typename Ret, typename... Args>
+    class function<Ret(Args...)> {
       public:
-        using result_type = R;
+        using result_type = Ret;
 
         // 构造
       public:
@@ -276,7 +289,7 @@ namespace mtl {
         function(function &&f) noexcept : m_storage(std::move(f.m_storage)) {}
 
         template <typename F>
-            requires(std::same_as<R, std::invoke_result_t<F, A...>>)
+            requires requires { invoke(std::declval<F>(), std::declval<Args>()...); }
         function(F f) : m_storage(f) {}
 
         ~function() = default;
@@ -284,7 +297,7 @@ namespace mtl {
         // assign
       public:
         template <typename F>
-            requires(std::same_as<R, std::invoke_result_t<std::decay_t<F>, A...>>)
+            requires requires { invoke(std::declval<F>(), std::declval<Args>()...); }
         auto operator=(F &&f) -> function & {
             function(std::forward<F>(f)).swap(*this);
             return *this;
@@ -326,9 +339,9 @@ namespace mtl {
       public:
         explicit operator bool() const noexcept { return static_cast<bool>(m_storage); }
 
-        auto operator()(A... args) const -> R {
+        auto operator()(Args... args) const -> Ret {
             if (*this) {
-                return m_storage(std::forward<A>(args)...);
+                return m_storage(std::forward<Args>(args)...);
             }
             throw bad_function_call();
         }
@@ -336,38 +349,38 @@ namespace mtl {
         auto swap(function &other) noexcept -> void { m_storage.swap(other.m_storage); }
 
       public:
-        _function_storage<R, A...> m_storage;
+        _function_storage<Ret, Args...> m_storage;
     };
 
     // 推导指南
     template <typename T>
     struct _function_guide_helper;
 
-    template <typename R, typename G, typename... A, bool NX>
-    struct _function_guide_helper<R (G::*)(A...) noexcept(NX)> {
-        using type = R(A...);
+    template <typename Ret, typename Class, typename... Args, bool NX>
+    struct _function_guide_helper<Ret (Class::*)(Args...) noexcept(NX)> {
+        using type = Ret(Args...);
     };
 
-    template <typename R, typename G, typename... A, bool NX>
-    struct _function_guide_helper<R (G::*)(A...) & noexcept(NX)> {
-        using type = R(A...);
+    template <typename Ret, typename Class, typename... Args, bool NX>
+    struct _function_guide_helper<Ret (Class::*)(Args...) & noexcept(NX)> {
+        using type = Ret(Args...);
     };
 
-    template <typename R, typename G, typename... A, bool NX>
-    struct _function_guide_helper<R (G::*)(A...) const noexcept(NX)> {
-        using type = R(A...);
+    template <typename Ret, typename Class, typename... Args, bool NX>
+    struct _function_guide_helper<Ret (Class::*)(Args...) const noexcept(NX)> {
+        using type = Ret(Args...);
     };
 
-    template <typename R, typename G, typename... A, bool NX>
-    struct _function_guide_helper<R (G::*)(A...) const & noexcept(NX)> {
-        using type = R(A...);
+    template <typename Ret, typename Class, typename... Args, bool NX>
+    struct _function_guide_helper<Ret (Class::*)(Args...) const & noexcept(NX)> {
+        using type = Ret(Args...);
     };
 
     template <typename T>
     using _function_guide_helper_t = _function_guide_helper<T>::type;
 
-    template <typename R, typename... Args>
-    function(R (*)(Args...)) -> function<R(Args...)>;
+    template <typename Ret, typename... Args>
+    function(Ret (*)(Args...)) -> function<Ret(Args...)>;
 
     template <typename F>
     function(F) -> function<_function_guide_helper_t<decltype(&F::operator())>>;

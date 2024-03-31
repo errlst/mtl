@@ -30,3 +30,57 @@ TEST(bitset_test, case_2) {
 }
 
 // binary operator
+TEST(bitset_test, case_3) {
+    auto mask1 = bitset<10>{12345};
+    auto mask2 = std::bitset<10>{12345};
+
+    auto b1 = bitset<10>{"0101101001"};
+    auto b2 = std::bitset<10>{"0101101001"};
+
+    b1 &= mask1;
+    b2 &= mask2;
+    EXPECT_EQ(b1.to_ullong(), b2.to_ullong());
+
+    b1 |= mask1;
+    b2 |= mask2;
+    EXPECT_EQ(b1.to_ullong(), b2.to_ullong());
+
+    b1 ^= mask1;
+    b2 ^= mask2;
+    EXPECT_EQ(b1.to_ullong(), b2.to_ullong());
+
+    EXPECT_EQ((~b1).to_ullong(), (~b2).to_ullong());
+}
+
+// shift operator
+TEST(bitset_test, case_4) {
+    EXPECT_EQ((bitset<8>{"0101101010"} << 4).to_ullong(), (std::bitset<8>{"0101101010"} << 4).to_ullong());
+    EXPECT_EQ((bitset<32>{"010101010101010101010100101"} << 10).to_ullong(), (std::bitset<32>{"010101010101010101010100101"} << 10).to_ullong());
+    EXPECT_EQ((bitset<32>{"010101010101010101010100101"} << 5).to_ullong(), (std::bitset<32>{"010101010101010101010100101"} << 5).to_ullong());
+
+    EXPECT_EQ((bitset<8>{"0101101010"} >> 4).to_ullong(), (std::bitset<8>{"0101101010"} >> 4).to_ullong());
+    EXPECT_EQ((bitset<32>{"010101010101010101010100101"} >> 10).to_ullong(), (std::bitset<32>{"010101010101010101010100101"} >> 10).to_ullong());
+    EXPECT_EQ((bitset<32>{"010101010101010101010100101"} >> 5).to_ullong(), (std::bitset<32>{"010101010101010101010100101"} >> 5).to_ullong());
+}
+
+// modifier
+TEST(bitset_test, case_5) {
+    auto b1 = bitset<32>{12345678};
+    auto b2 = std::bitset<32>{12345678};
+
+    EXPECT_EQ(b1.set().to_ullong(), b2.set().to_ullong());
+
+    EXPECT_EQ(b1.set(10, false).to_ullong(), b2.set(10, false).to_ullong());
+
+    EXPECT_THROW(b1.set(100, true), std::out_of_range);
+
+    EXPECT_EQ(b1.reset().to_ullong(), b2.reset().to_ullong());
+
+    EXPECT_EQ(b1.set().reset(10).to_ullong(), b2.set().reset(10));
+
+    EXPECT_EQ(b1.flip().to_ullong(), b2.flip().to_ullong());
+
+    EXPECT_EQ(b1.flip(10).to_ullong(), b2.flip(10).to_ullong());
+
+    EXPECT_THROW(b1.flip(100), std::out_of_range);
+}

@@ -74,15 +74,27 @@ namespace mtl {
 
 // 类型是否是特化
 namespace mtl {
+    // template <template <typename...> typename Temp, template <typename...> typename Spec, typename... Types>
+    // constexpr auto is_specialization(Spec<Types...>) -> bool { return std::is_same_v<Temp<Types...>, Spec<Types...>>; }
+
+    // template <typename Temp, typename Spec>
+    // constexpr auto is_specialization(Spec) -> bool { return false; }
+
+    // template <template <typename...> typename Temp, typename Spec>
+    // constexpr auto is_specialization(Spec) -> bool { return false; }
+
+    // template <typename Temp, template <typename...> typename Spec, typename... Types>
+    // constexpr auto is_specialization(Spec<Types...>) -> bool { return false; }
+
     template <template <typename...> typename Temp, template <typename...> typename Spec, typename... Types>
-    constexpr auto is_specialization(Spec<Types...>) -> bool { return std::is_same_v<Temp<Types...>, Spec<Types...>>; }
+    constexpr auto is_specialization(Spec<Types...>) -> std::conditional_t<std::is_same_v<Temp<Types...>, Spec<Types...>>, std::true_type, std::false_type>;
 
     template <typename Temp, typename Spec>
-    constexpr auto is_specialization(Spec) -> bool { return false; }
+    constexpr auto is_specialization(Spec) -> std::false_type;
 
     template <template <typename...> typename Temp, typename Spec>
-    constexpr auto is_specialization(Spec) -> bool { return false; }
+    constexpr auto is_specialization(Spec) -> std::false_type;
 
     template <typename Temp, template <typename...> typename Spec, typename... Types>
-    constexpr auto is_specialization(Spec<Types...>) -> bool { return false; }
+    constexpr auto is_specialization(Spec<Types...>) -> std::false_type;
 } // namespace mtl
