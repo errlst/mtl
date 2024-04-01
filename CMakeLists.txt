@@ -5,4 +5,4 @@ set(CMAKE_CXX_STANDARD 20)
 project(mtl)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/googletest)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
