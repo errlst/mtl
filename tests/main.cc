@@ -2,6 +2,7 @@
 #include "bitset_test.hpp"
 #include "functional_test.hpp"
 #include "optional_test.hpp"
+#include "pair_test.hpp"
 
 auto main(int argc, char *argv[]) -> int {
     testing::InitGoogleTest(&argc, argv);
