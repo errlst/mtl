@@ -1,6 +1,5 @@
 {
     "C_Cpp.intelliSenseEngine": "disabled",
-    "clang-format.assumeFilename": "../config/.clang-format",
     "clangd.arguments": [
         "--header-insertion=never"
     ]
