@@ -56,7 +56,7 @@ namespace mtl {
         deleter del;
         size_t s_count{0};
         size_t w_count{0};
-        std::mutex m_mut; // 保证 inc_x 和 dec_x 为原子操作
+        std::mutex m_mut; // 保证 inc 和 dec 为原子操作
     };
 } // namespace mtl
 
@@ -177,6 +177,20 @@ namespace mtl {
 
 // shared_ptr，忽略 Allocator 的作用，忽略 nullptr 相关构造函数
 namespace mtl {
+    //  判断是否是继承自 enable_shared_from_this
+    template <typename Derive>
+    class is_derived_from_esft {
+        template <typename T>
+        static constexpr auto test(const enable_shared_from_this<T> *) -> std::true_type;
+        static constexpr auto test(...) -> std::false_type;
+
+      public:
+        static constexpr bool value = decltype(test(std::declval<Derive *>()))::value;
+    };
+
+    template <typename Derive>
+    constexpr bool is_derived_from_esft_v = is_derived_from_esft<Derive>::value;
+
     template <typename T>
     class shared_ptr {
       public:
@@ -184,14 +198,18 @@ namespace mtl {
 
         // 构造
       public:
-        constexpr shared_ptr() noexcept {};
+        constexpr shared_ptr() noexcept {}
 
         template <typename U>
             requires(std::is_convertible_v<U (*)[], T *> ||
                      std::is_convertible_v<U *, T *>)
-        explicit shared_ptr(U *p)
-            : m_ptr(p), m_ctlblk(new _shared_ptr_ctlblk<T>(p)) {
+        explicit shared_ptr(U *p) : m_ptr(p), m_ctlblk(new _shared_ptr_ctlblk<T>(p)) {
             m_ctlblk->inc_s();
+            // init enable_shared_from_this
+            if constexpr (is_derived_from_esft_v<U>) {
+                if (p != nullptr && p->m_this.expired())
+                    p->m_this = shared_ptr<std::remove_cv_t<U>>(*this, const_cast<std::remove_cv_t<U> *>(p));
+            }
         }
 
         template <typename U, typename D>
@@ -199,9 +217,8 @@ namespace mtl {
                      requires { D{}(std::declval<U *>()); } &&
                      (std::is_convertible_v<U (*)[], T *> ||
                       std::is_convertible_v<U *, T *>))
-        shared_ptr(U *p, D d) : m_ptr(p), m_ctlblk(new _shared_ptr_ctlblk<T>(p)) {
+        shared_ptr(U *p, D d) : shared_ptr(p) {
             m_ctlblk->del = [d = std::move(d)](T *p) { d(p); };
-            m_ctlblk->inc_s();
         }
 
         template <typename U, typename D, typename A>
@@ -356,5 +373,32 @@ namespace mtl {
       public:
         element_type *m_ptr{nullptr};
         _shared_ptr_ctlblk<T> *m_ctlblk{nullptr};
+    };
+} // namespace mtl
+
+// enable_shared_from_this
+namespace mtl {
+    template <typename T>
+    class enable_shared_from_this {
+      protected:
+        constexpr enable_shared_from_this() noexcept {}
+
+        enable_shared_from_this(const enable_shared_from_this &) noexcept {}
+
+        auto operator=(const enable_shared_from_this &) noexcept -> enable_shared_from_this & { return *this; }
+
+        ~enable_shared_from_this() {}
+
+      public:
+        auto shared_from_this() -> shared_ptr<T> { return {m_this}; }
+
+        auto shared_from_this() const -> shared_ptr<const T> { return {m_this}; }
+
+        auto weak_from_this() noexcept -> weak_ptr<T> { return m_this; }
+
+        auto weak_from_this() const noexcept -> weak_ptr<const T> { return m_this; }
+
+      public:
+        mutable weak_ptr<T> m_this;
     };
 } // namespace mtl

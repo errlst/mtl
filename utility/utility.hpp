@@ -87,6 +87,9 @@ namespace mtl {
     template <typename T>
     class weak_ptr;
 
+    template <typename T>
+    class enable_shared_from_this;
+
     template <typename F>
     class function;
 } // namespace mtl
