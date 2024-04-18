@@ -86,19 +86,19 @@ namespace mtl {
         // assignment
       public:
         auto operator=(const any &a) -> any & {
-            any{a}.swap(*this);
+            any(a).swap(*this);
             return *this;
         }
 
         auto operator=(any &&a) -> any & {
-            any{std::move(a)}.swap(*this);
+            any(std::move(a)).swap(*this);
             return *this;
         }
 
         template <typename T>
             requires(std::is_copy_constructible_v<std::decay_t<T>>)
         auto operator=(T &&t) -> any & {
-            any{std::forward<T>(t)}.swap(*this);
+            any(std::forward<T>(t)).swap(*this);
             return *this;
         }
 
@@ -110,10 +110,17 @@ namespace mtl {
             reset();
             _any_manager_t<VT>::construct(*this, std::forward<Args>(args)...);
             m_manage = _any_manager_t<VT>::manage;
+            return *any_cast<T>(this);
         }
 
         template <typename T, typename U, typename... Args, typename VT = std::decay_t<T>>
-        constexpr auto emplace(std::initializer_list<U> lst, Args &&...args) -> VT & { return emplace(std::move(lst), std::forward<Args>(args)...); }
+            requires(std::is_copy_constructible_v<VT> && std::is_constructible_v<VT, std::initializer_list<U> &, Args...>)
+        constexpr auto emplace(std::initializer_list<U> lst, Args &&...args) -> VT & {
+            reset();
+            _any_manager_t<VT>::construct(*this, std::move(lst), std::forward<Args>(args)...);
+            m_manage = _any_manager_t<VT>::manage;
+            return *any_cast<T>(this);
+        }
 
         constexpr auto reset() noexcept -> void {
             if (has_value()) {
@@ -248,7 +255,7 @@ namespace mtl {
             char m_stack_mem[sizeof(void *)];
             void *m_heap_mem;
         };
-        _any_manager_manage_t m_manage;
+        _any_manager_manage_t m_manage = nullptr;
     };
 } // namespace mtl
 
@@ -280,8 +287,8 @@ namespace mtl {
 // make any
 namespace mtl {
     template <typename T, typename... Args>
-    auto make_any(Args &&...args) -> any { return {in_place_type<T>, std::forward<Args>(args)...}; }
+    auto make_any(Args &&...args) -> any { return any(in_place_type<T>, std::forward<Args>(args)...); }
 
     template <typename T, typename U, typename... Args>
-    auto make_any(std::initializer_list<U> lst, Args &&...args) { return make_any<T>(std::move(lst), std::forward<Args>(args)...); }
+    auto make_any(std::initializer_list<U> lst, Args &&...args) { return any(in_place_type<T>, lst, std::forward<Args>(args)...); }
 } // namespace mtl

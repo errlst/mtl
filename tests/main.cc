@@ -7,8 +7,5 @@
 
 auto main(int argc, char *argv[]) -> int {
     testing::InitGoogleTest(&argc, argv);
-
-    std::shared_ptr<int> p;
-
     return RUN_ALL_TESTS();
 }
