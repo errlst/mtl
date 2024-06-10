@@ -1,7 +1,8 @@
-参考 [c++20标准](https://timsong-cpp.github.io/cppwp/n4861/) 实现的部分标准库设施，包含以下几个模块，以及其对应的单元测试：
+c++20标准库部分设施实现。
 
-- [ ] concepts library
-- [ ] genral utilities library（测试中）
-- [ ] strings library
-- [ ] containers library
-- [ ] iterator library
+#### 项目结构
+```
+3rd：三方库，googletest。
+tests：单元测试。
+utility：utility 库实现。
+```
